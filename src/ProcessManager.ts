@@ -1,0 +1,158 @@
+import type { CliRenderer } from "@opentui/core";
+import type { ProcessInfo, ProcessMap } from "./types";
+
+type OutputCallback = (line: string) => void;
+
+export class ProcessManager {
+	private processes: ProcessMap = new Map();
+	private outputCallbacks: Map<string, Set<OutputCallback>> = new Map();
+
+	spawn(scriptName: string): boolean {
+		if (this.processes.has(scriptName)) {
+			return false;
+		}
+
+		try {
+			const proc = Bun.spawn({
+				cmd: ["bun", "run", scriptName],
+				cwd: process.cwd(),
+				stdout: "pipe",
+				stderr: "pipe",
+				env: process.env,
+			});
+
+			const processInfo: ProcessInfo = {
+				scriptName,
+				process: proc,
+				isRunning: true,
+				output: [],
+			};
+
+			this.processes.set(scriptName, processInfo);
+
+			// Handle stdout
+			const stdoutReader = proc.stdout?.getReader();
+			const stderrReader = proc.stderr?.getReader();
+			const decoder = new TextDecoder();
+
+			const readStream = async (
+				reader: ReadableStreamDefaultReader<Uint8Array> | undefined,
+				isError: boolean,
+			): Promise<void> => {
+				if (!reader) return;
+
+				try {
+					while (true) {
+						const { done, value } = await reader.read();
+						if (done) break;
+
+						const text = decoder.decode(value, { stream: true });
+						const lines = text.split("\n");
+
+						for (const line of lines) {
+							if (line || isError) {
+								const formattedLine = isError ? `\x1b[31m${line}\x1b[0m` : line;
+								const info = this.processes.get(scriptName);
+								if (info) {
+									info.output.push(formattedLine);
+									if (info.output.length > 1000) {
+										info.output.shift();
+									}
+								}
+								this.notifyOutput(scriptName, formattedLine);
+							}
+						}
+					}
+				} catch (error) {
+					console.error(
+						`Error reading ${isError ? "stderr" : "stdout"}:`,
+						error,
+					);
+				}
+			};
+
+			void readStream(stdoutReader, false);
+			void readStream(stderrReader, true);
+
+			// Handle process exit
+			void proc.exited.then((code) => {
+				const info = this.processes.get(scriptName);
+				if (info) {
+					info.isRunning = false;
+					info.exitCode = code ?? undefined;
+					info.output.push(`\n\x1b[33mProcess exited with code ${code}\x1b[0m`);
+				}
+				this.notifyOutput(
+					scriptName,
+					`\n\x1b[33mProcess exited with code ${code}\x1b[0m`,
+				);
+			});
+
+			return true;
+		} catch (error) {
+			console.error(`Failed to spawn ${scriptName}:`, error);
+			return false;
+		}
+	}
+
+	kill(scriptName: string): boolean {
+		const info = this.processes.get(scriptName);
+		if (!info || !info.isRunning) {
+			return false;
+		}
+
+		try {
+			info.process.kill(15); // SIGTERM
+			info.isRunning = false;
+			return true;
+		} catch (error) {
+			console.error(`Failed to kill ${scriptName}:`, error);
+			return false;
+		}
+	}
+
+	killAll(): void {
+		for (const [, info] of this.processes) {
+			if (info.isRunning) {
+				try {
+					info.process.kill(15);
+				} catch (error) {
+					console.error(`Failed to kill process:`, error);
+				}
+			}
+		}
+		this.processes.clear();
+	}
+
+	getOutput(scriptName: string): string[] {
+		return this.processes.get(scriptName)?.output || [];
+	}
+
+	isRunning(scriptName: string): boolean {
+		return this.processes.get(scriptName)?.isRunning || false;
+	}
+
+	onOutput(scriptName: string, callback: OutputCallback): () => void {
+		if (!this.outputCallbacks.has(scriptName)) {
+			this.outputCallbacks.set(scriptName, new Set());
+		}
+		this.outputCallbacks.get(scriptName)!.add(callback);
+
+		return () => {
+			this.outputCallbacks.get(scriptName)?.delete(callback);
+		};
+	}
+
+	private notifyOutput(scriptName: string, line: string): void {
+		const callbacks = this.outputCallbacks.get(scriptName);
+		if (callbacks) {
+			for (const cb of callbacks) {
+				try {
+					cb(line);
+				} catch (error) {
+					console.error("Output callback error:", error);
+				}
+			}
+		}
+	}
+}

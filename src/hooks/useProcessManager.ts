@@ -1,0 +1,228 @@
+import { join } from "path";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ProcessId, ProcessManager, ProcessMap } from "../types";
+
+export function useProcessManager(): ProcessManager {
+	const [processes, setProcesses] = useState<ProcessMap>(new Map());
+	const outputCallbacks = useRef<Map<ProcessId, Set<(line: string) => void>>>(
+		new Map(),
+	);
+
+	const notifyOutput = useCallback((processId: ProcessId, line: string) => {
+		const callbacks = outputCallbacks.current.get(processId);
+		if (callbacks) {
+			callbacks.forEach((cb) => cb(line));
+		}
+	}, []);
+
+	const spawn = useCallback(
+		(
+			processId: ProcessId,
+			packagePath: string,
+			scriptName: string,
+		): boolean => {
+			if (processes.has(processId)) {
+				return false;
+			}
+
+			try {
+				const cwd = packagePath
+					? join(process.cwd(), packagePath)
+					: process.cwd();
+
+				const proc = Bun.spawn({
+					cmd: ["bun", "run", scriptName],
+					cwd: cwd,
+					stdout: "pipe",
+					stderr: "pipe",
+					env: process.env,
+				});
+
+				const processInfo = {
+					processId,
+					packagePath,
+					scriptName,
+					process: proc,
+					isRunning: true,
+					output: [],
+				};
+
+				setProcesses((prev) => {
+					const next = new Map(prev);
+					next.set(processId, processInfo);
+					return next;
+				});
+
+				// Handle stdout
+				const stdoutReader = proc.stdout?.getReader();
+				const stderrReader = proc.stderr?.getReader();
+				const decoder = new TextDecoder();
+
+				const readStream = async (
+					reader: ReadableStreamDefaultReader<Uint8Array> | undefined,
+					isError: boolean,
+				) => {
+					if (!reader) return;
+
+					try {
+						while (true) {
+							const { done, value } = await reader.read();
+							if (done) break;
+
+							const text = decoder.decode(value, { stream: true });
+							const lines = text.split("\n");
+
+							for (const line of lines) {
+								if (line || isError) {
+									const formattedLine = isError
+										? `\x1b[31m${line}\x1b[0m`
+										: line;
+
+									setProcesses((prev) => {
+										const next = new Map(prev);
+										const info = next.get(processId);
+										if (info) {
+											info.output.push(formattedLine);
+											if (info.output.length > 1000) {
+												info.output.shift();
+											}
+										}
+										return next;
+									});
+
+									notifyOutput(processId, formattedLine);
+								}
+							}
+						}
+					} catch (error) {
+						console.error(
+							`Error reading ${isError ? "stderr" : "stdout"}:`,
+							error,
+						);
+					}
+				};
+
+				readStream(stdoutReader, false);
+				readStream(stderrReader, true);
+
+				// Handle process exit
+				proc.exited.then((code) => {
+					setProcesses((prev) => {
+						const next = new Map(prev);
+						const info = next.get(processId);
+						if (info) {
+							info.isRunning = false;
+							info.exitCode = code ?? undefined;
+							info.output.push(
+								`\n\x1b[33mProcess exited with code ${code}\x1b[0m`,
+							);
+						}
+						return next;
+					});
+					notifyOutput(
+						processId,
+						`\n\x1b[33mProcess exited with code ${code}\x1b[0m`,
+					);
+				});
+
+				return true;
+			} catch (error) {
+				console.error(`Failed to spawn ${processId}:`, error);
+				return false;
+			}
+		},
+		[processes, notifyOutput],
+	);
+
+	const kill = useCallback(
+		(processId: ProcessId): boolean => {
+			const info = processes.get(processId);
+			if (!info || !info.isRunning) {
+				return false;
+			}
+
+			try {
+				info.process.kill(15); // SIGTERM
+				setProcesses((prev) => {
+					const next = new Map(prev);
+					const updated = next.get(processId);
+					if (updated) {
+						updated.isRunning = false;
+					}
+					return next;
+				});
+				return true;
+			} catch (error) {
+				console.error(`Failed to kill ${processId}:`, error);
+				return false;
+			}
+		},
+		[processes],
+	);
+
+	const killAll = useCallback(() => {
+		for (const [processId, info] of processes) {
+			if (info.isRunning) {
+				try {
+					info.process.kill(15);
+				} catch (error) {
+					console.error(`Failed to kill ${processId}:`, error);
+				}
+			}
+		}
+		setProcesses(new Map());
+	}, [processes]);
+
+	const getOutput = useCallback(
+		(processId: ProcessId): string[] => {
+			return processes.get(processId)?.output || [];
+		},
+		[processes],
+	);
+
+	const isRunning = useCallback(
+		(processId: ProcessId): boolean => {
+			return processes.get(processId)?.isRunning || false;
+		},
+		[processes],
+	);
+
+	const onOutput = useCallback(
+		(processId: ProcessId, callback: (line: string) => void): (() => void) => {
+			if (!outputCallbacks.current.has(processId)) {
+				outputCallbacks.current.set(processId, new Set());
+			}
+			outputCallbacks.current.get(processId)!.add(callback);
+
+			return () => {
+				outputCallbacks.current.get(processId)?.delete(callback);
+			};
+		},
+		[],
+	);
+
+	// Cleanup on unmount
+	useEffect(() => {
+		return () => {
+			for (const [processId, info] of processes) {
+				if (info.isRunning) {
+					try {
+						info.process.kill(15);
+					} catch (error) {
+						console.error(`Failed to kill ${processId}:`, error);
+					}
+				}
+			}
+		};
+	}, [processes]);
+
+	return {
+		processes,
+		spawn,
+		kill,
+		killAll,
+		getOutput,
+		isRunning,
+		onOutput,
+	};
+}

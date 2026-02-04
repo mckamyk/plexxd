@@ -1,0 +1,36 @@
+# Source files
+src/
+*.tsx
+*.ts
+!*.d.ts
+
+# Config files
+tsconfig.json
+.editorconfig
+.prettierrc
+.eslintrc
+
+# Build artifacts
+node_modules/
+dist/
+.turbo/
+
+# Development files
+*.log
+.DS_Store
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+
+# Old binary name (if exists)
+termplex
+termplex-*
+
+# Bun
+bun.lockb
