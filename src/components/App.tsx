@@ -1,20 +1,26 @@
-import { useKeyboard } from "@opentui/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMonorepo } from "../hooks/useMonorepo";
-import { useProcessManager } from "../hooks/useProcessManager";
-import type { ListItem, ProcessId, WorkspaceInfo } from "../types";
-import { ScriptList } from "./ScriptList";
-import { TerminalOutput } from "./TerminalOutput";
+import { useKeyboard } from "@opentui/react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMonorepo } from "../hooks/useMonorepo"
+import { useProcessManager } from "../hooks/useProcessManager"
+import type {
+	ErrorDialogState,
+	ListItem,
+	ProcessId,
+	WorkspaceInfo,
+} from "../types"
+import { ErrorDialog } from "./ErrorDialog"
+import { ScriptList } from "./ScriptList"
+import { TerminalOutput } from "./TerminalOutput"
 
 function buildFlatList(
 	workspace: WorkspaceInfo,
 	collapsed: Set<string>,
 	processManager: ReturnType<typeof useProcessManager>,
 ): ListItem[] {
-	const items: ListItem[] = [];
+	const items: ListItem[] = []
 
 	// Root package scripts (no header)
-	const rootPkg = workspace.packages.find((p) => p.isRoot);
+	const rootPkg = workspace.packages.find((p) => p.isRoot)
 	if (rootPkg && rootPkg.scripts.length > 0) {
 		rootPkg.scripts.forEach((script) => {
 			items.push({
@@ -23,14 +29,14 @@ function buildFlatList(
 				packagePath: "",
 				scriptName: script.name,
 				command: script.command,
-			});
-		});
+			})
+		})
 	}
 
 	// Other packages (sorted alphabetically)
 	const otherPackages = workspace.packages
 		.filter((p) => !p.isRoot && p.scripts.length > 0)
-		.sort((a, b) => a.path.localeCompare(b.path));
+		.sort((a, b) => a.path.localeCompare(b.path))
 
 	otherPackages.forEach((pkg) => {
 		// Add separator line (don't add before first item)
@@ -38,13 +44,13 @@ function buildFlatList(
 			items.push({
 				type: "separator",
 				id: `sep:${pkg.path}`,
-			});
+			})
 		}
 
 		// Check if any script in this package is running
 		const hasRunningScript = pkg.scripts.some((s) =>
 			processManager.isRunning(`${pkg.path}/${s.name}`),
-		);
+		)
 
 		// Add header
 		items.push({
@@ -54,7 +60,7 @@ function buildFlatList(
 			collapsed: collapsed.has(pkg.path),
 			scriptCount: pkg.scripts.length,
 			hasRunningScript,
-		});
+		})
 
 		// Add scripts if expanded
 		if (!collapsed.has(pkg.path)) {
@@ -65,129 +71,150 @@ function buildFlatList(
 					packagePath: pkg.path,
 					scriptName: script.name,
 					command: script.command,
-				});
-			});
+				})
+			})
 		}
-	});
+	})
 
-	return items;
+	return items
 }
 
 export function App() {
-	const workspaceInfo = useMonorepo();
-	const [selectedIndex, setSelectedIndex] = useState(0);
+	const workspaceInfo = useMonorepo()
+	const [selectedIndex, setSelectedIndex] = useState(0)
 	const [collapsedPackages, setCollapsedPackages] = useState<Set<string>>(
 		new Set(),
-	);
-	const [selectedProcessId, setSelectedProcessId] = useState<ProcessId>("");
-	const [output, setOutput] = useState<string[]>([]);
-	const processManager = useProcessManager();
+	)
+	const [selectedProcessId, setSelectedProcessId] = useState<ProcessId>("")
+	const [output, setOutput] = useState<string[]>([])
+	const [errorDialog, setErrorDialog] = useState<ErrorDialogState>({
+		isOpen: false,
+		error: null,
+		scriptName: "",
+		packagePath: "",
+	})
+	const processManager = useProcessManager()
 
 	// Build flat list
 	const flatList = useMemo(
 		() => buildFlatList(workspaceInfo, collapsedPackages, processManager),
-		[workspaceInfo, collapsedPackages, processManager.processes],
-	);
+		[workspaceInfo, collapsedPackages, processManager],
+	)
 
 	// Subscribe to output changes for the selected process
 	useEffect(() => {
-		if (!selectedProcessId) return;
+		if (!selectedProcessId) return
 
-		setOutput(processManager.getOutput(selectedProcessId));
+		setOutput(processManager.getOutput(selectedProcessId))
 
 		const unsubscribe = processManager.onOutput(selectedProcessId, (line) => {
-			setOutput((prev) => [...prev.slice(-999), line]);
-		});
+			setOutput((prev) => [...prev.slice(-999), line])
+		})
 
-		return unsubscribe;
-	}, [selectedProcessId, processManager]);
+		return unsubscribe
+	}, [selectedProcessId, processManager])
 
 	// Update selected process ID when navigating
 	useEffect(() => {
-		const currentItem = flatList[selectedIndex];
+		const currentItem = flatList[selectedIndex]
 		if (currentItem?.type === "script") {
-			setSelectedProcessId(currentItem.id);
+			setSelectedProcessId(currentItem.id)
 		}
-	}, [selectedIndex, flatList]);
+	}, [selectedIndex, flatList])
 
 	useKeyboard(
 		useCallback(
 			(key) => {
-				if (flatList.length === 0) return;
+				if (flatList.length === 0) return
 
-				const currentItem = flatList[selectedIndex];
+				const currentItem = flatList[selectedIndex]
 
 				switch (key.name) {
 					case "up":
 					case "k":
 						setSelectedIndex((prev) => {
-							let newIndex = prev > 0 ? prev - 1 : flatList.length - 1;
+							let newIndex = prev > 0 ? prev - 1 : flatList.length - 1
 							// Skip separators
 							while (flatList[newIndex]?.type === "separator") {
-								newIndex = newIndex > 0 ? newIndex - 1 : flatList.length - 1;
-								if (newIndex === prev) break; // Avoid infinite loop
+								newIndex = newIndex > 0 ? newIndex - 1 : flatList.length - 1
+								if (newIndex === prev) break // Avoid infinite loop
 							}
-							return newIndex;
-						});
-						break;
+							return newIndex
+						})
+						break
 
 					case "down":
 					case "j":
 						setSelectedIndex((prev) => {
-							let newIndex = prev < flatList.length - 1 ? prev + 1 : 0;
+							let newIndex = prev < flatList.length - 1 ? prev + 1 : 0
 							// Skip separators
 							while (flatList[newIndex]?.type === "separator") {
-								newIndex = newIndex < flatList.length - 1 ? newIndex + 1 : 0;
-								if (newIndex === prev) break;
+								newIndex = newIndex < flatList.length - 1 ? newIndex + 1 : 0
+								if (newIndex === prev) break
 							}
-							return newIndex;
-						});
-						break;
+							return newIndex
+						})
+						break
 
 					case "return":
 						if (currentItem.type === "header") {
 							// Toggle collapse
 							setCollapsedPackages((prev) => {
-								const next = new Set(prev);
-								if (next.has(currentItem.packagePath!)) {
-									next.delete(currentItem.packagePath!);
+								if (!currentItem.packagePath || !currentItem.scriptName)
+									return prev
+								const next = new Set(prev)
+								if (next.has(currentItem.packagePath)) {
+									next.delete(currentItem.packagePath)
 								} else {
-									next.add(currentItem.packagePath!);
+									next.add(currentItem.packagePath)
 								}
-								return next;
-							});
+								return next
+							})
 						} else if (currentItem.type === "script") {
-							const processId = currentItem.id;
+							const processId = currentItem.id
 							if (processManager.isRunning(processId)) {
-								processManager.kill(processId);
+								processManager.kill(processId)
 							} else {
-								processManager.spawn(
+								if (!currentItem.packagePath || !currentItem.scriptName) return
+								const result = processManager.spawn(
 									processId,
-									currentItem.packagePath!,
-									currentItem.scriptName!,
-									currentItem.command!,
-								);
-								setSelectedProcessId(processId);
+									currentItem.packagePath,
+									currentItem.scriptName,
+									workspaceInfo.type,
+								)
+								if (result.success) {
+									setSelectedProcessId(processId)
+								} else if (result.error) {
+									setErrorDialog({
+										isOpen: true,
+										error: result.error,
+										scriptName: currentItem.scriptName,
+										packagePath: currentItem.packagePath,
+									})
+								}
 							}
 						}
-						break;
+						break
 
 					case "x":
 						if (currentItem.type === "script") {
-							processManager.kill(currentItem.id);
+							processManager.kill(currentItem.id)
 						}
-						break;
+						break
 
 					case "q":
 					case "escape":
-						processManager.killAll();
-						process.exit(0);
-						break;
+						processManager.killAll()
+						process.exit(0)
 				}
 			},
-			[flatList, selectedIndex, processManager, collapsedPackages],
+			[flatList, selectedIndex, processManager, workspaceInfo.type],
 		),
-	);
+	)
+
+	const closeErrorDialog = useCallback(() => {
+		setErrorDialog((prev) => ({ ...prev, isOpen: false }))
+	}, [])
 
 	if (flatList.length === 0) {
 		return (
@@ -206,7 +233,7 @@ export function App() {
 				<box style={{ height: 1 }} />
 				<text fg="#888888">Press q to exit</text>
 			</box>
-		);
+		)
 	}
 
 	return (
@@ -225,6 +252,13 @@ export function App() {
 			/>
 			<box style={{ width: 1 }} />
 			<TerminalOutput processId={selectedProcessId} output={output} />
+			<ErrorDialog
+				isOpen={errorDialog.isOpen}
+				error={errorDialog.error}
+				scriptName={errorDialog.scriptName}
+				packagePath={errorDialog.packagePath}
+				onClose={closeErrorDialog}
+			/>
 		</box>
-	);
+	)
 }

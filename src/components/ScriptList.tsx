@@ -1,11 +1,10 @@
-import { useTerminalDimensions } from "@opentui/react";
-import React from "react";
-import type { ListItem, ProcessId } from "../types";
+import { useTerminalDimensions } from "@opentui/react"
+import type { ListItem, ProcessId } from "../types"
 
 interface ScriptListProps {
-	items: ListItem[];
-	selectedIndex: number;
-	isRunning: (processId: ProcessId) => boolean;
+	items: ListItem[]
+	selectedIndex: number
+	isRunning: (processId: ProcessId) => boolean
 }
 
 export function ScriptList({
@@ -13,7 +12,7 @@ export function ScriptList({
 	selectedIndex,
 	isRunning,
 }: ScriptListProps) {
-	const { width } = useTerminalDimensions();
+	const { width } = useTerminalDimensions()
 
 	if (items.length === 0) {
 		return (
@@ -28,7 +27,7 @@ export function ScriptList({
 			>
 				<text fg="#888888">No scripts found in package.json</text>
 			</box>
-		);
+		)
 	}
 
 	return (
@@ -46,20 +45,20 @@ export function ScriptList({
 			</text>
 			<box style={{ height: 1 }} />
 			{items.map((item, index) => {
-				const isSelected = index === selectedIndex;
+				const isSelected = index === selectedIndex
 
 				// Separator line
 				if (item.type === "separator") {
 					return (
 						<box
 							key={item.id}
+							border={["bottom"]}
 							style={{
 								height: 1,
-								borderBottom: true,
 								borderColor: "#64748b",
 							}}
 						/>
-					);
+					)
 				}
 
 				// Package header
@@ -82,14 +81,14 @@ export function ScriptList({
 								<text fg="#22c55e">●</text>
 							)}
 						</box>
-					);
+					)
 				}
 
 				// Script item
-				const running = isRunning(item.id);
-				const bg = isSelected ? "#2563eb" : undefined;
-				const fg = isSelected ? "#FFFFFF" : running ? "#22c55e" : "#94a3b8";
-				const prefix = item.packagePath ? "  " : ""; // Indent package scripts
+				const running = isRunning(item.id)
+				const bg = isSelected ? "#2563eb" : undefined
+				const fg = isSelected ? "#FFFFFF" : running ? "#22c55e" : "#94a3b8"
+				const prefix = item.packagePath ? "  " : "" // Indent package scripts
 
 				return (
 					<box
@@ -106,8 +105,8 @@ export function ScriptList({
 							{item.scriptName}
 						</text>
 					</box>
-				);
+				)
 			})}
 		</box>
-	);
+	)
 }

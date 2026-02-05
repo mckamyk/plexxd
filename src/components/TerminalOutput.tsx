@@ -1,22 +1,22 @@
-import { useTerminalDimensions } from "@opentui/react";
-import React, { useEffect, useState } from "react";
-import type { ProcessId } from "../types";
+import { useTerminalDimensions } from "@opentui/react"
+import { useEffect, useState } from "react"
+import type { ProcessId } from "../types"
 
 interface TerminalOutputProps {
-	processId: ProcessId;
-	output: string[];
+	processId: ProcessId
+	output: string[]
 }
 
 export function TerminalOutput({ processId, output }: TerminalOutputProps) {
-	const { height } = useTerminalDimensions();
-	const [displayLines, setDisplayLines] = useState<string[]>([]);
+	const { height } = useTerminalDimensions()
+	const [displayLines, setDisplayLines] = useState<string[]>([])
 
 	useEffect(() => {
 		// Keep only visible lines to prevent memory issues
-		const maxLines = Math.max(10, height - 10);
-		const lines = output.slice(-maxLines);
-		setDisplayLines(lines);
-	}, [output, height]);
+		const maxLines = Math.max(10, height - 10)
+		const lines = output.slice(-maxLines)
+		setDisplayLines(lines)
+	}, [output, height])
 
 	if (!processId) {
 		return (
@@ -35,7 +35,7 @@ export function TerminalOutput({ processId, output }: TerminalOutputProps) {
 				<box style={{ height: 1 }} />
 				<text fg="#64748b">Select a script to view output</text>
 			</box>
-		);
+		)
 	}
 
 	return (
@@ -56,13 +56,13 @@ export function TerminalOutput({ processId, output }: TerminalOutputProps) {
 				{displayLines.length === 0 ? (
 					<text fg="#64748b">No output yet...</text>
 				) : (
-					displayLines.map((line, index) => (
-						<text key={`${processId}-${index}`} fg="#e2e8f0">
+					displayLines.map((line) => (
+						<text key={`${processId}`} fg="#e2e8f0">
 							{line || " "}
 						</text>
 					))
 				)}
 			</box>
 		</box>
-	);
+	)
 }

@@ -1,16 +1,16 @@
-import { existsSync, readFileSync } from "fs";
-import { load as yamlLoad } from "js-yaml";
-import { join, relative } from "path";
-import { useEffect, useState } from "react";
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { load as yamlLoad } from "js-yaml"
+import { useEffect, useState } from "react"
 import type {
 	PackageJson,
 	ScriptInfo,
 	WorkspaceInfo,
 	WorkspacePackage,
-} from "../types";
+} from "../types"
 
 interface PnpmWorkspaceConfig {
-	packages?: string[];
+	packages?: string[]
 }
 
 function detectWorkspaceType(cwd: string): "pnpm" | "npm" | "yarn" | "single" {
@@ -19,27 +19,27 @@ function detectWorkspaceType(cwd: string): "pnpm" | "npm" | "yarn" | "single" {
 		existsSync(join(cwd, "pnpm-workspace.yaml")) ||
 		existsSync(join(cwd, "pnpm-workspace.yml"))
 	) {
-		return "pnpm";
+		return "pnpm"
 	}
 
 	// Check for package.json with workspaces field
-	const pkgJsonPath = join(cwd, "package.json");
+	const pkgJsonPath = join(cwd, "package.json")
 	if (existsSync(pkgJsonPath)) {
 		try {
-			const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as PackageJson;
+			const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as PackageJson
 			if (pkg.workspaces) {
 				// Check for yarn vs npm by looking at lockfile
 				if (existsSync(join(cwd, "yarn.lock"))) {
-					return "yarn";
+					return "yarn"
 				}
-				return "npm";
+				return "npm"
 			}
 		} catch {
 			// Ignore parse errors
 		}
 	}
 
-	return "single";
+	return "single"
 }
 
 function parsePnpmWorkspace(cwd: string): string[] | null {
@@ -47,40 +47,40 @@ function parsePnpmWorkspace(cwd: string): string[] | null {
 		? join(cwd, "pnpm-workspace.yaml")
 		: existsSync(join(cwd, "pnpm-workspace.yml"))
 			? join(cwd, "pnpm-workspace.yml")
-			: null;
+			: null
 
-	if (!yamlPath) return null;
+	if (!yamlPath) return null
 
 	try {
-		const content = readFileSync(yamlPath, "utf8");
-		const config = yamlLoad(content) as PnpmWorkspaceConfig;
-		return config.packages || [];
+		const content = readFileSync(yamlPath, "utf8")
+		const config = yamlLoad(content) as PnpmWorkspaceConfig
+		return config.packages || []
 	} catch (error) {
-		console.error("Failed to parse pnpm-workspace.yaml:", error);
-		return null;
+		console.error("Failed to parse pnpm-workspace.yaml:", error)
+		return null
 	}
 }
 
 function parseNpmWorkspaces(cwd: string): string[] | null {
-	const pkgJsonPath = join(cwd, "package.json");
-	if (!existsSync(pkgJsonPath)) return null;
+	const pkgJsonPath = join(cwd, "package.json")
+	if (!existsSync(pkgJsonPath)) return null
 
 	try {
-		const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as PackageJson;
-		if (!pkg.workspaces) return null;
+		const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as PackageJson
+		if (!pkg.workspaces) return null
 
 		// Handle both array and object formats
 		if (Array.isArray(pkg.workspaces)) {
-			return pkg.workspaces;
+			return pkg.workspaces
 		}
 		if (pkg.workspaces.packages && Array.isArray(pkg.workspaces.packages)) {
-			return pkg.workspaces.packages;
+			return pkg.workspaces.packages
 		}
 
-		return null;
+		return null
 	} catch (error) {
-		console.error("Failed to parse package.json workspaces:", error);
-		return null;
+		console.error("Failed to parse package.json workspaces:", error)
+		return null
 	}
 }
 
@@ -88,49 +88,49 @@ async function expandGlobPatterns(
 	cwd: string,
 	patterns: string[],
 ): Promise<string[]> {
-	const { Glob } = await import("bun");
-	const packages: Set<string> = new Set();
+	const { Glob } = await import("bun")
+	const packages: Set<string> = new Set()
 
 	for (const pattern of patterns) {
 		// Skip negations (exclusions)
-		if (pattern.startsWith("!")) continue;
+		if (pattern.startsWith("!")) continue
 
 		try {
-			const glob = new Glob(pattern);
+			const glob = new Glob(pattern)
 
 			// Scan for matching directories
 			for await (const file of glob.scan({ cwd, onlyFiles: false })) {
-				const fullPath = join(cwd, file);
-				const pkgJsonPath = join(fullPath, "package.json");
+				const fullPath = join(cwd, file)
+				const pkgJsonPath = join(fullPath, "package.json")
 
 				// Only include if package.json exists
 				if (existsSync(pkgJsonPath)) {
-					packages.add(file);
+					packages.add(file)
 				}
 			}
 		} catch (error) {
-			console.error(`Failed to expand glob pattern ${pattern}:`, error);
+			console.error(`Failed to expand glob pattern ${pattern}:`, error)
 		}
 	}
 
-	return Array.from(packages);
+	return Array.from(packages)
 }
 
 function loadPackageScripts(packagePath: string): ScriptInfo[] {
-	const pkgJsonPath = join(packagePath, "package.json");
-	if (!existsSync(pkgJsonPath)) return [];
+	const pkgJsonPath = join(packagePath, "package.json")
+	if (!existsSync(pkgJsonPath)) return []
 
 	try {
-		const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as PackageJson;
-		if (!pkg.scripts) return [];
+		const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as PackageJson
+		if (!pkg.scripts) return []
 
 		return Object.entries(pkg.scripts).map(([name, command]) => ({
 			name,
 			command,
-		}));
+		}))
 	} catch (error) {
-		console.error(`Failed to load scripts from ${pkgJsonPath}:`, error);
-		return [];
+		console.error(`Failed to load scripts from ${pkgJsonPath}:`, error)
+		return []
 	}
 }
 
@@ -139,41 +139,41 @@ export function useMonorepo(): WorkspaceInfo {
 		type: "single",
 		root: process.cwd(),
 		packages: [],
-	});
+	})
 
 	useEffect(() => {
 		async function detectAndLoadWorkspace() {
-			const cwd = process.cwd();
-			const type = detectWorkspaceType(cwd);
+			const cwd = process.cwd()
+			const type = detectWorkspaceType(cwd)
 
-			let patterns: string[] | null = null;
+			let patterns: string[] | null = null
 
 			if (type === "pnpm") {
-				patterns = parsePnpmWorkspace(cwd);
+				patterns = parsePnpmWorkspace(cwd)
 			} else if (type === "npm" || type === "yarn") {
-				patterns = parseNpmWorkspaces(cwd);
+				patterns = parseNpmWorkspaces(cwd)
 			}
 
-			const packages: WorkspacePackage[] = [];
+			const packages: WorkspacePackage[] = []
 
 			// Always load root package
-			const rootScripts = loadPackageScripts(cwd);
+			const rootScripts = loadPackageScripts(cwd)
 			if (rootScripts.length > 0) {
 				packages.push({
 					path: "",
 					fullPath: cwd,
 					scripts: rootScripts,
 					isRoot: true,
-				});
+				})
 			}
 
 			// Load workspace packages if found
 			if (patterns && patterns.length > 0) {
-				const packagePaths = await expandGlobPatterns(cwd, patterns);
+				const packagePaths = await expandGlobPatterns(cwd, patterns)
 
 				for (const pkgPath of packagePaths) {
-					const fullPath = join(cwd, pkgPath);
-					const scripts = loadPackageScripts(fullPath);
+					const fullPath = join(cwd, pkgPath)
+					const scripts = loadPackageScripts(fullPath)
 
 					// Only include packages with scripts
 					if (scripts.length > 0) {
@@ -182,35 +182,35 @@ export function useMonorepo(): WorkspaceInfo {
 							fullPath,
 							scripts,
 							isRoot: false,
-						});
+						})
 					}
 				}
 
 				// Sort non-root packages alphabetically
-				const rootPkg = packages.filter((p) => p.isRoot);
+				const rootPkg = packages.filter((p) => p.isRoot)
 				const otherPkgs = packages
 					.filter((p) => !p.isRoot)
-					.sort((a, b) => a.path.localeCompare(b.path));
+					.sort((a, b) => a.path.localeCompare(b.path))
 
-				packages.length = 0;
-				packages.push(...rootPkg, ...otherPkgs);
+				packages.length = 0
+				packages.push(...rootPkg, ...otherPkgs)
 			}
 
 			// If workspace config exists but no packages found, fallback to single mode
 			const finalType =
 				patterns && packages.filter((p) => !p.isRoot).length > 0
 					? type
-					: "single";
+					: "single"
 
 			setWorkspaceInfo({
 				type: finalType,
 				root: cwd,
 				packages,
-			});
+			})
 		}
 
-		detectAndLoadWorkspace();
-	}, []);
+		detectAndLoadWorkspace()
+	}, [])
 
-	return workspaceInfo;
+	return workspaceInfo
 }

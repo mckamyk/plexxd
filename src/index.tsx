@@ -1,6 +1,6 @@
-import { createCliRenderer } from "@opentui/core";
-import { createRoot } from "@opentui/react";
-import { App } from "./components/App";
+import { createCliRenderer } from "@opentui/core"
+import { createRoot } from "@opentui/react"
+import { App } from "./components/App"
 
 async function main() {
 	const renderer = await createCliRenderer({
@@ -8,12 +8,12 @@ async function main() {
 		targetFps: 30,
 		useMouse: false,
 		useAlternateScreen: true,
-	});
+	})
 
-	createRoot(renderer).render(<App />);
+	createRoot(renderer).render(<App />)
 }
 
 main().catch((error) => {
-	console.error("Failed to start termplex:", error);
-	process.exit(1);
-});
+	console.error("Failed to start termplex:", error)
+	process.exit(1)
+})
