@@ -2,10 +2,9 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard } from "@opentui/react"
 import { useEffect, useRef, useState } from "react"
 import { useProcess, useProcessList } from "../hooks/useProcessManager"
-import { useModalIsOpened, useTerminalOutput } from "../hooks/useView"
+import { useModalIsOpened, useTerminalOutput, useTheme } from "../stores"
 import type { OutputLine } from "../stores/outputStore"
 import outputStore from "../stores/outputStore"
-import { useTheme } from "../stores/themeStore"
 
 export function TerminalOutput() {
 	const { t } = useTheme()

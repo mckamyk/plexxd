@@ -1,5 +1,7 @@
 import { join } from "node:path"
+import { useStore } from "@tanstack/react-store"
 import { Store } from "@tanstack/store"
+import { darkTheme, lightTheme, type ThemeMode } from "../config/themes"
 import { log } from "../lib/logger"
 import {
 	buildFlatList,
@@ -11,8 +13,6 @@ import outputStore from "./outputStore"
 
 // Cache bun availability check
 let bunAvailable: boolean | null = null
-
-// Create the store
 
 function checkBunAvailable(): boolean {
 	if (bunAvailable !== null) {
@@ -33,32 +33,141 @@ function checkBunAvailable(): boolean {
 	}
 }
 
-// Store state interface
-interface ProcessManagerState {
-	processes: ProcessMap
-	selectedId?: ProcessId
+function getResolvedTheme(theme: ThemeMode): "light" | "dark" {
+	if (theme === "light") return "light"
+	if (theme === "dark") return "dark"
+
+	const isDark = detectSystemDarkMode()
+	return isDark ? "dark" : "light"
 }
 
+function detectSystemDarkMode(): boolean {
+	const termProgram = process.env.TERM_PROGRAM?.toLowerCase()
+
+	if (process.env.THEME?.toLowerCase() === "dark") return true
+	if (process.env.THEME?.toLowerCase() === "light") return false
+
+	if (termProgram === "apple_terminal") {
+		return false
+	}
+
+	if (termProgram === "iterm2") {
+		const colorFGBG = process.env.COLORFGBG
+		if (colorFGBG) {
+			const parts = colorFGBG.split(";")
+			if (parts.length >= 2) {
+				const bg = parseInt(parts[1], 10)
+				return bg <= 6
+			}
+		}
+	}
+
+	return false
+}
+
+// Workspace data (loaded at startup)
 export const packages = await detectAndLoadWorkspace()
 export const workspaceType = detectWorkspaceType(process.cwd())
 export const scripts = buildFlatList(packages)
 
-// Create the store
-export const processManagerStore = new Store<ProcessManagerState>({
+// Unified Store State
+interface AppState {
+	// Process management
+	processes: ProcessMap
+	selectedId?: ProcessId
+
+	// Theme
+	themeSetting: "dark" | "light" | "system"
+
+	// View visibility
+	view: {
+		commandPallete: boolean
+		logViewer: boolean
+		terminalOutput: boolean
+	}
+}
+
+// Create unified store
+export const appStore = new Store<AppState>({
 	processes: new Map(),
-	selectedId: scripts[0].id,
+	selectedId: scripts[0]?.id,
+	themeSetting: "system",
+	view: {
+		logViewer: false,
+		commandPallete: false,
+		terminalOutput: false,
+	},
 })
 
+// Theme hooks and functions
+export const useTheme = () => {
+	const setting = useStore(appStore, (s) => s.themeSetting)
+	const theme = getResolvedTheme(setting)
+
+	const setTheme = (theme: "dark" | "light" | "system") => {
+		appStore.setState((prev) => ({ ...prev, themeSetting: theme }))
+	}
+
+	const t = theme === "light" ? lightTheme : darkTheme
+
+	return { setting, theme, setTheme, t }
+}
+
+// View hooks
+const viewSetter = (key: keyof AppState["view"]) => {
+	return (value: boolean | ((prev: boolean) => boolean)) => {
+		if (typeof value === "boolean") {
+			appStore.setState((s) => ({ ...s, view: { ...s.view, [key]: value } }))
+		} else {
+			appStore.setState((s) => ({
+				...s,
+				view: { ...s.view, [key]: value(s.view[key]) },
+			}))
+		}
+	}
+}
+
+export const useFocus = () => {
+	const state = useStore(appStore, (s) => s.view)
+
+	if (state.commandPallete) return "commandPallete"
+	if (state.logViewer) return "logViewer"
+	if (state.terminalOutput) return "terminalOutput"
+	return "scriptList"
+}
+
+export const useLogViewer = () => {
+	const active = useStore(appStore, (s) => s.view.logViewer)
+	const setActive = viewSetter("logViewer")
+	return [active, setActive] as const
+}
+
+export const useCommandPallete = () => {
+	const active = useStore(appStore, (s) => s.view.commandPallete)
+	const setActive = viewSetter("commandPallete")
+	return [active, setActive] as const
+}
+
+export const useTerminalOutput = () => {
+	const active = useStore(appStore, (s) => s.view.terminalOutput)
+	const setActive = viewSetter("terminalOutput")
+	return [active, setActive] as const
+}
+
+export const useModalIsOpened = () => {
+	return useStore(appStore, (s) => s.view.logViewer || s.view.commandPallete)
+}
+
+// Process management functions
 // Output callbacks registry (not in store state, but module-level)
 const outputCallbacks = new Map<ProcessId, Set<(line: string) => void>>()
 
-// Spawn a new process
 export function spawnProcess(
 	processId: ProcessId,
 	packagePath: string,
 	scriptName: string,
 ): SpawnResult {
-	const currentProcesses = processManagerStore.state.processes
+	const currentProcesses = appStore.state.processes
 
 	log.info(
 		`Spawning process ${processId} with script ${scriptName} in workspace type ${workspaceType}`,
@@ -101,7 +210,7 @@ export function spawnProcess(
 			exitCode: undefined,
 		}
 
-		processManagerStore.setState((prev) => {
+		appStore.setState((prev) => {
 			const next = new Map(prev.processes)
 			next.set(processId, processInfo)
 			return { ...prev, processes: next }
@@ -129,7 +238,6 @@ export function spawnProcess(
 					for (const line of lines) {
 						if (line || isError) {
 							const formattedLine = isError ? `\x1b[31m${line}\x1b[0m` : line
-
 							outputStore.appendOutput(processId, formattedLine)
 						}
 					}
@@ -157,9 +265,8 @@ export function spawnProcess(
 	}
 }
 
-// Kill a specific process
 export function killProcess(processId: ProcessId): boolean {
-	const processes = processManagerStore.state.processes
+	const processes = appStore.state.processes
 	const info = processes.get(processId)
 
 	if (!info || !info.isRunning) {
@@ -168,7 +275,7 @@ export function killProcess(processId: ProcessId): boolean {
 
 	try {
 		info.process.kill(15) // SIGTERM
-		processManagerStore.setState((prev) => {
+		appStore.setState((prev) => {
 			const next = new Map(prev.processes)
 			const updated = next.get(processId)
 			if (updated) {
@@ -185,9 +292,8 @@ export function killProcess(processId: ProcessId): boolean {
 	}
 }
 
-// Kill all running processes
 export function killAllProcesses(): void {
-	const processes = processManagerStore.state.processes
+	const processes = appStore.state.processes
 
 	for (const [processId, info] of processes) {
 		if (info.isRunning) {
@@ -202,15 +308,13 @@ export function killAllProcesses(): void {
 		}
 	}
 
-	processManagerStore.setState((prev) => ({ ...prev, processes: new Map() }))
+	appStore.setState((prev) => ({ ...prev, processes: new Map() }))
 }
 
-// Check if process is running
 export function isProcessRunning(processId: ProcessId): boolean {
-	return processManagerStore.state.processes.get(processId)?.isRunning || false
+	return appStore.state.processes.get(processId)?.isRunning || false
 }
 
-// Subscribe to output for a process
 export function onProcessOutput(
 	processId: ProcessId,
 	callback: (line: string) => void,
@@ -223,4 +327,19 @@ export function onProcessOutput(
 	return () => {
 		outputCallbacks.get(processId)?.delete(callback)
 	}
+}
+
+export const viewStore = {
+	get state() {
+		return appStore.state.view
+	},
+	setState: (
+		view: AppState["view"] | ((prev: AppState["view"]) => AppState["view"]),
+	) => {
+		if (typeof view === "function") {
+			appStore.setState((prev) => ({ ...prev, view: view(prev.view) }))
+		} else {
+			appStore.setState((prev) => ({ ...prev, view }))
+		}
+	},
 }

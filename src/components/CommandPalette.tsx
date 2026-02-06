@@ -1,8 +1,7 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { useCallback, useMemo, useState } from "react"
 import { commands, filterCommands } from "../config/commands"
-import { useCommandPallete } from "../hooks/useView"
-import { useTheme } from "../stores/themeStore"
+import { useCommandPallete, useTheme } from "../stores"
 
 export function CommandPalette() {
 	const { width } = useTerminalDimensions()

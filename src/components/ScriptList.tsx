@@ -1,16 +1,18 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { useProcess, useProcessList } from "../hooks/useProcessManager"
-import { useModalIsOpened, useTerminalOutput } from "../hooks/useView"
 import { log } from "../lib/logger"
 import {
+	appStore,
 	killAllProcesses,
 	killProcess,
-	processManagerStore,
 	scripts,
 	spawnProcess,
-} from "../stores/processManagerStore"
-import { useTheme } from "../stores/themeStore"
+	useModalIsOpened,
+	useTerminalOutput,
+	useTheme,
+} from "../stores"
 import type { ListItem } from "../types"
+import { Keybinds } from "./Keybinds"
 
 export function ScriptList() {
 	const { width } = useTerminalDimensions()
@@ -25,8 +27,7 @@ export function ScriptList() {
 		if (!focused) return
 		if (scripts.length === 0) return
 		if (isModalOpened) return
-		const proc =
-			selected && processManagerStore.state.processes.get(selected.id)
+		const proc = selected && appStore.state.processes.get(selected.id)
 
 		switch (key.name) {
 			case "up":
@@ -112,6 +113,8 @@ export function ScriptList() {
 			{scripts.map((item) => (
 				<ListRow key={item.id} item={item} />
 			))}
+			<box style={{ flexGrow: 2 }} />
+			<Keybinds />
 		</box>
 	)
 }
@@ -149,6 +152,7 @@ const ListRow = ({ item }: { item: ListItem }) => {
 					backgroundColor: isSelected ? t.primary : undefined,
 					flexDirection: "row",
 					justifyContent: "space-between",
+					paddingLeft: 1,
 				}}
 			>
 				<text fg={isSelected ? t.selectedText : t.header}>
@@ -171,6 +175,7 @@ const ListRow = ({ item }: { item: ListItem }) => {
 				height: 1,
 				backgroundColor: bg,
 				flexDirection: "row",
+				paddingLeft: 1,
 			}}
 		>
 			<text fg={fg}>

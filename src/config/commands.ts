@@ -1,6 +1,4 @@
-import { viewStore } from "../hooks/useView"
-import { killAllProcesses } from "../stores/processManagerStore"
-import { themeStore } from "../stores/themeStore"
+import { appStore, killAllProcesses, viewStore } from "../stores"
 import type { Command } from "../types"
 
 export const commands: Command[] = [
@@ -11,10 +9,10 @@ export const commands: Command[] = [
 		description: "Switch between light, dark, and system themes",
 		execute: () => {
 			const modes = ["system", "light", "dark"] as const
-			const current = themeStore.state
+			const current = appStore.state.themeSetting
 			const index = modes.indexOf(current)
 			const next = modes[index + 1] ?? modes[0]
-			themeStore.setState(next)
+			appStore.setState((s) => ({ ...s, themeSetting: next }))
 		},
 	},
 	{
@@ -22,7 +20,7 @@ export const commands: Command[] = [
 		name: "Set Light Theme",
 		description: "Switch to light color theme",
 		execute: () => {
-			themeStore.setState("light")
+			appStore.setState((s) => ({ ...s, themeSetting: "light" }))
 		},
 	},
 	{
@@ -30,7 +28,7 @@ export const commands: Command[] = [
 		name: "Set Dark Theme",
 		description: "Switch to dark color theme",
 		execute: () => {
-			themeStore.setState("dark")
+			appStore.setState((s) => ({ ...s, themeSetting: "dark" }))
 		},
 	},
 	{

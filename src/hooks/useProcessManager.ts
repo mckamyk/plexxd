@@ -1,9 +1,9 @@
 import { useStore } from "@tanstack/react-store"
+import { appStore, scripts } from "../stores"
 import outputStore, { type OutputLine } from "../stores/outputStore"
-import { processManagerStore, scripts } from "../stores/processManagerStore"
 
 export const useProcess = (processId?: string) => {
-	return useStore(processManagerStore, (s) =>
+	return useStore(appStore, (s) =>
 		processId ? s.processes.get(processId) : undefined,
 	)
 }
@@ -23,11 +23,11 @@ export const useOutput = ({
 
 export const useProcessList = () => {
 	const selected = useStore(
-		processManagerStore,
+		appStore,
 		(s) => scripts.find((i) => i.id === s.selectedId) ?? scripts[0],
 	)
 	const setSelected = (id: string) =>
-		processManagerStore.setState((s) => ({
+		appStore.setState((s) => ({
 			...s,
 			selectedId: id,
 		}))

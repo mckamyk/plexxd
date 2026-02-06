@@ -1,8 +1,7 @@
 import { useKeyboard } from "@opentui/react"
 import { useCallback, useMemo, useState } from "react"
-import { useLogViewer } from "../hooks/useView"
 import { type LogLevel, log } from "../lib/logger"
-import { useTheme } from "../stores/themeStore"
+import { useLogViewer, useTheme } from "../stores"
 
 const FILTER_CYCLE: (LogLevel | null)[] = [
 	null,
