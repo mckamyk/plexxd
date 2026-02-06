@@ -1,4 +1,5 @@
 import { useTerminalDimensions } from "@opentui/react"
+import { useConfig } from "../hooks/useConfig"
 import type { ListItem, ProcessId } from "../types"
 
 interface ScriptListProps {
@@ -13,6 +14,7 @@ export function ScriptList({
 	isRunning,
 }: ScriptListProps) {
 	const { width } = useTerminalDimensions()
+	const { currentTheme: t } = useConfig()
 
 	if (items.length === 0) {
 		return (
@@ -25,7 +27,7 @@ export function ScriptList({
 					paddingRight: 1,
 				}}
 			>
-				<text fg="#888888">No scripts found in package.json</text>
+				<text fg={t.textTertiary}>No scripts found in package.json</text>
 			</box>
 		)
 	}
@@ -38,9 +40,11 @@ export function ScriptList({
 				flexDirection: "column",
 				paddingLeft: 1,
 				paddingRight: 1,
+				backgroundColor: t.bgPrimary,
+				borderColor: t.border,
 			}}
 		>
-			<text fg="#FFFF00" attributes={1}>
+			<text fg={t.header} attributes={1}>
 				Scripts
 			</text>
 			<box style={{ height: 1 }} />
@@ -55,7 +59,7 @@ export function ScriptList({
 							border={["bottom"]}
 							style={{
 								height: 1,
-								borderColor: "#64748b",
+								borderColor: t.border,
 							}}
 						/>
 					)
@@ -68,17 +72,17 @@ export function ScriptList({
 							key={item.id}
 							style={{
 								height: 1,
-								backgroundColor: isSelected ? "#2563eb" : undefined,
+								backgroundColor: isSelected ? t.primary : undefined,
 								flexDirection: "row",
 								justifyContent: "space-between",
 							}}
 						>
-							<text fg={isSelected ? "#FFFFFF" : "#FFFF00"}>
+							<text fg={isSelected ? t.selectedText : t.header}>
 								{item.collapsed ? "▶" : "▼"} {item.packagePath} (
 								{item.scriptCount})
 							</text>
 							{item.collapsed && item.hasRunningScript && (
-								<text fg="#22c55e">●</text>
+								<text fg={t.success}>●</text>
 							)}
 						</box>
 					)
@@ -86,8 +90,12 @@ export function ScriptList({
 
 				// Script item
 				const running = isRunning(item.id)
-				const bg = isSelected ? "#2563eb" : undefined
-				const fg = isSelected ? "#FFFFFF" : running ? "#22c55e" : "#94a3b8"
+				const bg = isSelected ? t.primary : undefined
+				const fg = isSelected
+					? t.selectedText
+					: running
+						? t.success
+						: t.textSecondary
 				const prefix = item.packagePath ? "  " : "" // Indent package scripts
 
 				return (

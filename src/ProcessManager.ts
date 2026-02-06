@@ -1,3 +1,4 @@
+import { log } from "./lib/logger"
 import type { ProcessInfo, ProcessMap } from "./types"
 
 type OutputCallback = (line: string) => void
@@ -68,9 +69,8 @@ export class ProcessManager {
 						}
 					}
 				} catch (error) {
-					console.error(
-						`Error reading ${isError ? "stderr" : "stdout"}:`,
-						error,
+					log.error(
+						`Error reading ${isError ? "stderr" : "stdout"}: ${error instanceof Error ? error.message : error}`,
 					)
 				}
 			}
@@ -92,9 +92,12 @@ export class ProcessManager {
 				)
 			})
 
+			log.info(`Spawned process ${processId}`)
 			return true
 		} catch (error) {
-			console.error(`Failed to spawn ${scriptName}:`, error)
+			log.error(
+				`Failed to spawn ${scriptName}: ${error instanceof Error ? error.message : error}`,
+			)
 			return false
 		}
 	}
@@ -108,9 +111,12 @@ export class ProcessManager {
 		try {
 			info.process.kill(15) // SIGTERM
 			info.isRunning = false
+			log.info(`Killed process ${scriptName}`)
 			return true
 		} catch (error) {
-			console.error(`Failed to kill ${scriptName}:`, error)
+			log.error(
+				`Failed to kill ${scriptName}: ${error instanceof Error ? error.message : error}`,
+			)
 			return false
 		}
 	}
@@ -121,7 +127,9 @@ export class ProcessManager {
 				try {
 					info.process.kill(15)
 				} catch (error) {
-					console.error(`Failed to kill process:`, error)
+					log.error(
+						`Failed to kill process: ${error instanceof Error ? error.message : error}`,
+					)
 				}
 			}
 		}
@@ -157,7 +165,9 @@ export class ProcessManager {
 				try {
 					cb(line)
 				} catch (error) {
-					console.error("Output callback error:", error)
+					log.error(
+						`Output callback error: ${error instanceof Error ? error.message : error}`,
+					)
 				}
 			}
 		}

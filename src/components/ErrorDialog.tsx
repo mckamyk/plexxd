@@ -1,5 +1,6 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { useCallback } from "react"
+import { useConfig } from "../hooks/useConfig"
 
 interface ErrorDialogProps {
 	isOpen: boolean
@@ -17,6 +18,7 @@ export function ErrorDialog({
 	onClose,
 }: ErrorDialogProps) {
 	const { width, height } = useTerminalDimensions()
+	const { currentTheme: t } = useConfig()
 
 	useKeyboard(
 		useCallback(
@@ -59,30 +61,31 @@ export function ErrorDialog({
 				borderStyle: "rounded",
 				flexDirection: "column",
 				padding: 1,
-				backgroundColor: "#1e1e1e",
+				backgroundColor: t.bgSecondary,
+				borderColor: t.border,
 			}}
 		>
-			<text fg="#ef4444" attributes={1}>
+			<text fg={t.error} attributes={1}>
 				Failed to Start Script
 			</text>
 			<box style={{ height: 1 }} />
-			<text fg="#94a3b8">
-				Script: <text fg="#fbbf24">{scriptName}</text>
+			<text fg={t.textSecondary}>
+				Script: <text fg={t.warning}>{scriptName}</text>
 			</text>
-			<text fg="#94a3b8">
-				Package: <text fg="#fbbf24">{displayPath}</text>
+			<text fg={t.textSecondary}>
+				Package: <text fg={t.warning}>{displayPath}</text>
 			</text>
 			<box style={{ height: 1 }} />
-			<text fg="#ef4444" attributes={1}>
+			<text fg={t.error} attributes={1}>
 				Error:
 			</text>
 			<box style={{ flexDirection: "column", flexGrow: 1 }}>
-				<text fg="#fca5a5">{errorMessage}</text>
+				<text fg={t.error}>{errorMessage}</text>
 			</box>
 			{errorStack && (
 				<>
 					<box style={{ height: 1 }} />
-					<text fg="#64748b" attributes={1}>
+					<text fg={t.textSecondary} attributes={1}>
 						Stack Trace:
 					</text>
 					<box style={{ flexDirection: "column", flexGrow: 1 }}>
@@ -91,7 +94,7 @@ export function ErrorDialog({
 							.slice(0, 5)
 							.map((line, index) => (
 								// biome-ignore lint/suspicious/noArrayIndexKey: its whatever, just an error box
-								<text key={index} fg="#94a3b8">
+								<text key={index} fg={t.textTertiary}>
 									{line.length > dialogWidth - 4
 										? `${line.substring(0, dialogWidth - 7)}...`
 										: line}
@@ -101,7 +104,7 @@ export function ErrorDialog({
 				</>
 			)}
 			<box style={{ height: 1 }} />
-			<text fg="#64748b">Press Enter or Escape to close</text>
+			<text fg={t.textTertiary}>Press Enter or Escape to close</text>
 		</box>
 	)
 }

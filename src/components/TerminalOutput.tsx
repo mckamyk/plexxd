@@ -1,5 +1,6 @@
 import { useTerminalDimensions } from "@opentui/react"
 import { useEffect, useState } from "react"
+import { useConfig } from "../hooks/useConfig"
 import type { ProcessId } from "../types"
 
 interface TerminalOutputProps {
@@ -9,6 +10,7 @@ interface TerminalOutputProps {
 
 export function TerminalOutput({ processId, output }: TerminalOutputProps) {
 	const { height } = useTerminalDimensions()
+	const { currentTheme: t } = useConfig()
 	const [displayLines, setDisplayLines] = useState<string[]>([])
 
 	useEffect(() => {
@@ -27,13 +29,14 @@ export function TerminalOutput({ processId, output }: TerminalOutputProps) {
 					flexDirection: "column",
 					paddingLeft: 1,
 					paddingRight: 1,
+					borderColor: t.border,
 				}}
 			>
-				<text fg="#FFFF00" attributes={1}>
+				<text fg={t.header} attributes={1}>
 					Output
 				</text>
 				<box style={{ height: 1 }} />
-				<text fg="#64748b">Select a script to view output</text>
+				<text fg={t.textSecondary}>Select a script to view output</text>
 			</box>
 		)
 	}
@@ -46,18 +49,19 @@ export function TerminalOutput({ processId, output }: TerminalOutputProps) {
 				flexDirection: "column",
 				paddingLeft: 1,
 				paddingRight: 1,
+				borderColor: t.border,
 			}}
 		>
-			<text fg="#FFFF00" attributes={1}>
+			<text fg={t.header} attributes={1}>
 				{processId}
 			</text>
 			<box style={{ height: 1 }} />
 			<box style={{ flexDirection: "column", flexGrow: 1 }}>
 				{displayLines.length === 0 ? (
-					<text fg="#64748b">No output yet...</text>
+					<text fg={t.textSecondary}>No output yet...</text>
 				) : (
 					displayLines.map((line) => (
-						<text key={`${processId}`} fg="#e2e8f0">
+						<text key={`${processId}`} fg={t.textPrimary}>
 							{line || " "}
 						</text>
 					))

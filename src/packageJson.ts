@@ -1,3 +1,4 @@
+import { log } from "./lib/logger"
 import type { ScriptInfo } from "./types"
 
 export function readPackageJson(): ScriptInfo[] {
@@ -6,13 +7,17 @@ export function readPackageJson(): ScriptInfo[] {
 			scripts?: Record<string, string>
 		}
 		if (pkg.scripts) {
-			return Object.entries(pkg.scripts).map(([name, command]) => ({
+			const scripts = Object.entries(pkg.scripts).map(([name, command]) => ({
 				name,
 				command,
 			}))
+			log.info(`Loaded ${scripts.length} scripts from package.json`)
+			return scripts
 		}
 	} catch (error) {
-		console.error("Failed to read package.json:", error)
+		log.error(
+			`Failed to read package.json: ${error instanceof Error ? error.message : error}`,
+		)
 	}
 	return []
 }

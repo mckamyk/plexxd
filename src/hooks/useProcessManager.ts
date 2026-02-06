@@ -1,5 +1,6 @@
 import { join } from "node:path"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { log } from "../lib/logger"
 import type {
 	ProcessId,
 	ProcessManager,
@@ -33,9 +34,15 @@ function checkBunAvailable(): boolean {
 
 export function useProcessManager(): ProcessManager {
 	const [processes, setProcesses] = useState<ProcessMap>(new Map())
+	const processesRef = useRef<ProcessMap>(processes)
 	const outputCallbacks = useRef<Map<ProcessId, Set<(line: string) => void>>>(
 		new Map(),
 	)
+
+	// Keep ref in sync with state for cleanup
+	useEffect(() => {
+		processesRef.current = processes
+	}, [processes])
 
 	const notifyOutput = useCallback((processId: ProcessId, line: string) => {
 		const callbacks = outputCallbacks.current.get(processId)
@@ -51,6 +58,9 @@ export function useProcessManager(): ProcessManager {
 			scriptName: string,
 			workspaceType: WorkspaceType,
 		): SpawnResult => {
+			log.info(
+				`Spawning process ${processId} with script ${scriptName} in workspace type ${workspaceType}`,
+			)
 			if (processes.has(processId)) {
 				return { success: false }
 			}
@@ -79,6 +89,7 @@ export function useProcessManager(): ProcessManager {
 					stderr: "pipe",
 					env: process.env,
 				})
+				log.info(`Spawned process ${processId} with command ${cmd.join(" ")}`)
 
 				const processInfo = {
 					processId,
@@ -138,9 +149,8 @@ export function useProcessManager(): ProcessManager {
 							}
 						}
 					} catch (error) {
-						console.error(
-							`Error reading ${isError ? "stderr" : "stdout"}:`,
-							error,
+						log.error(
+							`Error reading ${isError ? "stderr" : "stdout"}: ${error instanceof Error ? error.message : error}`,
 						)
 					}
 				}
@@ -196,7 +206,9 @@ export function useProcessManager(): ProcessManager {
 				})
 				return true
 			} catch (error) {
-				console.error(`Failed to kill ${processId}:`, error)
+				log.error(
+					`Failed to kill ${processId}: ${error instanceof Error ? error.message : error}`,
+				)
 				return false
 			}
 		},
@@ -209,7 +221,9 @@ export function useProcessManager(): ProcessManager {
 				try {
 					info.process.kill(15)
 				} catch (error) {
-					console.error(`Failed to kill ${processId}:`, error)
+					log.error(
+						`Failed to kill ${processId}: ${error instanceof Error ? error.message : error}`,
+					)
 				}
 			}
 		}
@@ -244,20 +258,26 @@ export function useProcessManager(): ProcessManager {
 		[],
 	)
 
-	// Cleanup on unmount
+	// Cleanup on unmount only
 	useEffect(() => {
 		return () => {
-			for (const [processId, info] of processes) {
+			// Only kill processes on actual unmount, not on re-renders
+			const currentProcesses = processesRef.current
+			for (const [processId, info] of currentProcesses) {
 				if (info.isRunning) {
 					try {
 						info.process.kill(15)
+						log.info(`Killed process ${processId} on unmount`)
 					} catch (error) {
-						console.error(`Failed to kill ${processId}:`, error)
+						log.error(
+							`Failed to kill ${processId}: ${error instanceof Error ? error.message : error}`,
+						)
 					}
 				}
 			}
 		}
-	}, [processes])
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
 
 	return {
 		processes,

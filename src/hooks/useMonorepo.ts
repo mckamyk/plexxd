@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { load as yamlLoad } from "js-yaml"
 import { useEffect, useState } from "react"
+import { log } from "../lib/logger"
 import type {
 	PackageJson,
 	ScriptInfo,
@@ -56,7 +57,9 @@ function parsePnpmWorkspace(cwd: string): string[] | null {
 		const config = yamlLoad(content) as PnpmWorkspaceConfig
 		return config.packages || []
 	} catch (error) {
-		console.error("Failed to parse pnpm-workspace.yaml:", error)
+		log.error(
+			`Failed to parse pnpm-workspace.yaml: ${error instanceof Error ? error.message : error}`,
+		)
 		return null
 	}
 }
@@ -79,7 +82,9 @@ function parseNpmWorkspaces(cwd: string): string[] | null {
 
 		return null
 	} catch (error) {
-		console.error("Failed to parse package.json workspaces:", error)
+		log.error(
+			`Failed to parse package.json workspaces: ${error instanceof Error ? error.message : error}`,
+		)
 		return null
 	}
 }
@@ -109,7 +114,9 @@ async function expandGlobPatterns(
 				}
 			}
 		} catch (error) {
-			console.error(`Failed to expand glob pattern ${pattern}:`, error)
+			log.error(
+				`Failed to expand glob pattern ${pattern}: ${error instanceof Error ? error.message : error}`,
+			)
 		}
 	}
 
@@ -129,7 +136,9 @@ function loadPackageScripts(packagePath: string): ScriptInfo[] {
 			command,
 		}))
 	} catch (error) {
-		console.error(`Failed to load scripts from ${pkgJsonPath}:`, error)
+		log.error(
+			`Failed to load scripts from ${pkgJsonPath}: ${error instanceof Error ? error.message : error}`,
+		)
 		return []
 	}
 }
@@ -144,7 +153,9 @@ export function useMonorepo(): WorkspaceInfo {
 	useEffect(() => {
 		async function detectAndLoadWorkspace() {
 			const cwd = process.cwd()
+			log.info(`Detecting workspace type in ${cwd}`)
 			const type = detectWorkspaceType(cwd)
+			log.info(`Detected workspace type: ${type}`)
 
 			let patterns: string[] | null = null
 
@@ -152,6 +163,10 @@ export function useMonorepo(): WorkspaceInfo {
 				patterns = parsePnpmWorkspace(cwd)
 			} else if (type === "npm" || type === "yarn") {
 				patterns = parseNpmWorkspaces(cwd)
+			}
+
+			if (patterns) {
+				log.info(`Found workspace patterns: ${patterns.join(", ")}`)
 			}
 
 			const packages: WorkspacePackage[] = []
@@ -165,11 +180,13 @@ export function useMonorepo(): WorkspaceInfo {
 					scripts: rootScripts,
 					isRoot: true,
 				})
+				log.info(`Loaded root package with ${rootScripts.length} scripts`)
 			}
 
 			// Load workspace packages if found
 			if (patterns && patterns.length > 0) {
 				const packagePaths = await expandGlobPatterns(cwd, patterns)
+				log.info(`Expanded to ${packagePaths.length} packages`)
 
 				for (const pkgPath of packagePaths) {
 					const fullPath = join(cwd, pkgPath)
@@ -202,6 +219,9 @@ export function useMonorepo(): WorkspaceInfo {
 					? type
 					: "single"
 
+			log.info(
+				`Final workspace type: ${finalType} with ${packages.length} packages`,
+			)
 			setWorkspaceInfo({
 				type: finalType,
 				root: cwd,

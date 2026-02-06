@@ -1,14 +1,20 @@
 import { useKeyboard } from "@opentui/react"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { createCommands } from "../config/commands"
+import { useConfig } from "../hooks/useConfig"
 import { useMonorepo } from "../hooks/useMonorepo"
 import { useProcessManager } from "../hooks/useProcessManager"
+import { log } from "../lib/logger"
 import type {
+	Command,
 	ErrorDialogState,
 	ListItem,
 	ProcessId,
 	WorkspaceInfo,
 } from "../types"
+import { CommandPalette } from "./CommandPalette"
 import { ErrorDialog } from "./ErrorDialog"
+import { LogViewer } from "./LogViewer"
 import { ScriptList } from "./ScriptList"
 import { TerminalOutput } from "./TerminalOutput"
 
@@ -81,6 +87,7 @@ function buildFlatList(
 
 export function App() {
 	const workspaceInfo = useMonorepo()
+	const { currentTheme: t, toggleTheme } = useConfig()
 	const [selectedIndex, setSelectedIndex] = useState(0)
 	const [collapsedPackages, setCollapsedPackages] = useState<Set<string>>(
 		new Set(),
@@ -93,6 +100,10 @@ export function App() {
 		scriptName: "",
 		packagePath: "",
 	})
+	const [showLogViewer, setShowLogViewer] = useState(false)
+	const [showCommandPalette, setShowCommandPalette] = useState(false)
+	const [commandSearch, setCommandSearch] = useState("")
+	const [commandIndex, setCommandIndex] = useState(0)
 	const processManager = useProcessManager()
 
 	// Build flat list
@@ -130,8 +141,24 @@ export function App() {
 				const currentItem = flatList[selectedIndex]
 
 				switch (key.name) {
+					case "p":
+						if (key.ctrl) {
+							setShowCommandPalette((prev) => !prev)
+							if (!showCommandPalette) {
+								setCommandSearch("")
+								setCommandIndex(0)
+							}
+						}
+						break
+
+					case "f12":
+						if (showCommandPalette) break
+						setShowLogViewer((prev) => !prev)
+						break
+
 					case "up":
 					case "k":
+						if (showLogViewer || showCommandPalette) break
 						setSelectedIndex((prev) => {
 							let newIndex = prev > 0 ? prev - 1 : flatList.length - 1
 							// Skip separators
@@ -145,6 +172,7 @@ export function App() {
 
 					case "down":
 					case "j":
+						if (showLogViewer || showCommandPalette) break
 						setSelectedIndex((prev) => {
 							let newIndex = prev < flatList.length - 1 ? prev + 1 : 0
 							// Skip separators
@@ -157,31 +185,44 @@ export function App() {
 						break
 
 					case "return":
+						log.info(
+							`showLogViewer: ${showLogViewer} type: ${currentItem.type} `,
+						)
+						if (showLogViewer || showCommandPalette) break
 						if (currentItem.type === "header") {
 							// Toggle collapse
 							setCollapsedPackages((prev) => {
-								if (!currentItem.packagePath || !currentItem.scriptName)
-									return prev
+								if (currentItem.packagePath === undefined) return prev
 								const next = new Set(prev)
-								if (next.has(currentItem.packagePath)) {
-									next.delete(currentItem.packagePath)
+								const path = currentItem.packagePath || "root"
+								if (next.has(path)) {
+									next.delete(path)
 								} else {
-									next.add(currentItem.packagePath)
+									next.add(path)
 								}
 								return next
 							})
 						} else if (currentItem.type === "script") {
 							const processId = currentItem.id
+							log.info(`isRunning: ${processManager.isRunning(processId)}`)
 							if (processManager.isRunning(processId)) {
 								processManager.kill(processId)
 							} else {
-								if (!currentItem.packagePath || !currentItem.scriptName) return
+								log.info(
+									`spawn ${currentItem.packagePath} ${currentItem.scriptName}`,
+								)
+								if (
+									currentItem.packagePath === undefined ||
+									!currentItem.scriptName
+								)
+									return
 								const result = processManager.spawn(
 									processId,
 									currentItem.packagePath,
 									currentItem.scriptName,
 									workspaceInfo.type,
 								)
+								log.info(`spawn result: ${JSON.stringify(result)}`)
 								if (result.success) {
 									setSelectedProcessId(processId)
 								} else if (result.error) {
@@ -189,7 +230,7 @@ export function App() {
 										isOpen: true,
 										error: result.error,
 										scriptName: currentItem.scriptName,
-										packagePath: currentItem.packagePath,
+										packagePath: currentItem.packagePath || "root",
 									})
 								}
 							}
@@ -197,6 +238,7 @@ export function App() {
 						break
 
 					case "x":
+						if (showLogViewer || showCommandPalette) break
 						if (currentItem.type === "script") {
 							processManager.kill(currentItem.id)
 						}
@@ -204,17 +246,55 @@ export function App() {
 
 					case "q":
 					case "escape":
+						if (showCommandPalette) break
+						if (showLogViewer) {
+							setShowLogViewer(false)
+							break
+						}
 						processManager.killAll()
 						process.exit(0)
 				}
 			},
-			[flatList, selectedIndex, processManager, workspaceInfo.type],
+			[
+				flatList,
+				selectedIndex,
+				processManager,
+				workspaceInfo.type,
+				showLogViewer,
+				showCommandPalette,
+			],
 		),
 	)
 
 	const closeErrorDialog = useCallback(() => {
 		setErrorDialog((prev) => ({ ...prev, isOpen: false }))
 	}, [])
+
+	const closeLogViewer = useCallback(() => {
+		setShowLogViewer(false)
+	}, [])
+
+	const closeCommandPalette = useCallback(() => {
+		setShowCommandPalette(false)
+		setCommandSearch("")
+		setCommandIndex(0)
+	}, [])
+
+	// Create commands with context
+	const commands = useMemo<Command[]>(
+		() =>
+			createCommands({
+				toggleTheme,
+				openLogViewer: () => setShowLogViewer(true),
+				killAllProcesses: () => processManager.killAll(),
+				exit: () => {
+					processManager.killAll()
+					process.exit(0)
+				},
+				closePalette: closeCommandPalette,
+			}),
+		[toggleTheme, processManager, closeCommandPalette],
+	)
 
 	if (flatList.length === 0) {
 		return (
@@ -227,11 +307,11 @@ export function App() {
 					height: "100%",
 				}}
 			>
-				<text fg="#ef4444" attributes={1}>
+				<text fg={t.error} attributes={1}>
 					No package.json found or no scripts defined
 				</text>
 				<box style={{ height: 1 }} />
-				<text fg="#888888">Press q to exit</text>
+				<text fg={t.textTertiary}>Press q to exit</text>
 			</box>
 		)
 	}
@@ -258,6 +338,17 @@ export function App() {
 				scriptName={errorDialog.scriptName}
 				packagePath={errorDialog.packagePath}
 				onClose={closeErrorDialog}
+			/>
+			{showLogViewer && <LogViewer onClose={closeLogViewer} />}
+			<CommandPalette
+				commands={commands}
+				isOpen={showCommandPalette}
+				searchQuery={commandSearch}
+				selectedIndex={commandIndex}
+				onSearchChange={setCommandSearch}
+				onSelectIndex={setCommandIndex}
+				onExecute={(cmd) => cmd.execute()}
+				onClose={closeCommandPalette}
 			/>
 		</box>
 	)

@@ -84,3 +84,17 @@ export interface ProcessManager {
 		callback: (line: string) => void,
 	) => () => void
 }
+
+export interface Command {
+	id: string
+	name: string
+	shortcut?: string
+	description?: string
+	execute: () => void
+}
+
+export interface CommandPaletteState {
+	isOpen: boolean
+	searchQuery: string
+	selectedIndex: number
+}
