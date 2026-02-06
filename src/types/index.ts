@@ -31,16 +31,10 @@ export interface ListItem {
 	packagePath?: string // "" for root, "apps/web" for packages
 	scriptName?: string // "dev"
 	command?: string
-
-	// For headers
-	scriptCount?: number
-	hasRunningScript?: boolean // For collapsed header indicator
 }
 
 // Process ID format: "apps/web/dev" or "dev" for root
 export type ProcessId = string
-
-export type OutputLine = { content: string; offset: number }
 
 export interface ProcessInfo {
 	processId: ProcessId
@@ -48,8 +42,6 @@ export interface ProcessInfo {
 	scriptName: string
 	process: ReturnType<typeof Bun.spawn>
 	isRunning: boolean
-	output: OutputLine[]
-	numLines: number
 	exitCode?: number
 }
 

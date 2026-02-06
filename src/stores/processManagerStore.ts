@@ -10,6 +10,7 @@ import type {
 	WorkspacePackage,
 	WorkspaceType,
 } from "../types"
+import outputStore from "./outputStore"
 
 // Cache bun availability check
 let bunAvailable: boolean | null = null
@@ -56,22 +57,14 @@ export const processManagerStore = new Store<ProcessManagerState>({
 // Output callbacks registry (not in store state, but module-level)
 const outputCallbacks = new Map<ProcessId, Set<(line: string) => void>>()
 
-// Helper to notify output callbacks
-function notifyOutput(processId: ProcessId, line: string): void {
-	const callbacks = outputCallbacks.get(processId)
-	if (callbacks) {
-		callbacks.forEach((cb) => void cb(line))
-	}
-}
-
 // Spawn a new process
 export function spawnProcess(
 	processId: ProcessId,
 	packagePath: string,
 	scriptName: string,
-	workspaceType: WorkspaceType,
 ): SpawnResult {
 	const currentProcesses = processManagerStore.state.processes
+	const workspaceType = processManagerStore.state.workspaceType
 
 	log.info(
 		`Spawning process ${processId} with script ${scriptName} in workspace type ${workspaceType}`,
@@ -111,8 +104,6 @@ export function spawnProcess(
 			scriptName,
 			process: proc,
 			isRunning: true,
-			output: [],
-			numLines: 0,
 			exitCode: undefined,
 		}
 
@@ -145,23 +136,7 @@ export function spawnProcess(
 						if (line || isError) {
 							const formattedLine = isError ? `\x1b[31m${line}\x1b[0m` : line
 
-							processManagerStore.setState((prev) => {
-								const next = new Map(prev.processes)
-								const info = next.get(processId)
-								if (info) {
-									info.output.push({
-										content: formattedLine,
-										offset: info.numLines,
-									})
-									info.numLines++
-									if (info.output.length > 1000) {
-										info.output.shift()
-									}
-								}
-								return { ...prev, processes: next }
-							})
-
-							notifyOutput(processId, formattedLine)
+							outputStore.appendOutput(processId, formattedLine)
 						}
 					}
 				}
@@ -177,22 +152,8 @@ export function spawnProcess(
 
 		// Handle process exit
 		proc.exited.then((code) => {
-			processManagerStore.setState((prev) => {
-				const next = new Map(prev.processes)
-				const info = next.get(processId)
-				if (info) {
-					info.isRunning = false
-					info.exitCode = code ?? undefined
-					const exitMessage = `\n\x1b[33mProcess exited with code ${code}\x1b[0m`
-					info.output.push({ content: exitMessage, offset: info.numLines })
-					info.numLines++
-				}
-				return { ...prev, processes: next }
-			})
-			notifyOutput(
-				processId,
-				`\n\x1b[33mProcess exited with code ${code}\x1b[0m`,
-			)
+			const exitMessage = `\n\x1b[33mProcess exited with code ${code}\x1b[0m`
+			outputStore.appendOutput(processId, exitMessage)
 		})
 
 		return { success: true }
@@ -238,6 +199,7 @@ export function killAllProcesses(): void {
 		if (info.isRunning) {
 			try {
 				info.process.kill(15)
+				outputStore.clearOutput(processId)
 			} catch (error) {
 				log.error(
 					`Failed to kill ${processId}: ${error instanceof Error ? error.message : error}`,
@@ -247,12 +209,6 @@ export function killAllProcesses(): void {
 	}
 
 	processManagerStore.setState((prev) => ({ ...prev, processes: new Map() }))
-}
-
-// Get output for a process
-export function getProcessOutput(processId: ProcessId): string[] {
-	const info = processManagerStore.state.processes.get(processId)
-	return info?.output.map((line) => line.content) || []
 }
 
 // Check if process is running
@@ -272,23 +228,5 @@ export function onProcessOutput(
 
 	return () => {
 		outputCallbacks.get(processId)?.delete(callback)
-	}
-}
-
-// Cleanup on app exit
-export function cleanupProcesses(): void {
-	const processes = processManagerStore.state.processes
-
-	for (const [processId, info] of processes) {
-		if (info.isRunning) {
-			try {
-				info.process.kill(15)
-				log.info(`Killed process ${processId} on cleanup`)
-			} catch (error) {
-				log.error(
-					`Failed to kill ${processId}: ${error instanceof Error ? error.message : error}`,
-				)
-			}
-		}
 	}
 }

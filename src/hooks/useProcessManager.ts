@@ -1,67 +1,8 @@
 import { useStore } from "@tanstack/react-store"
-import { useCallback, useMemo } from "react"
+import { useMemo } from "react"
 import { buildFlatList } from "../lib/monorepo"
-import {
-	getProcessOutput,
-	isProcessRunning,
-	killAllProcesses,
-	killProcess,
-	onProcessOutput,
-	processManagerStore,
-	spawnProcess,
-} from "../stores/processManagerStore"
-import type { ProcessId, ProcessManager, SpawnResult } from "../types"
-
-export function useProcessManager(): ProcessManager {
-	// Subscribe to store changes
-	const processes = useStore(processManagerStore, (s) => s.processes)
-	const workspaceType = useStore(processManagerStore, (s) => s.workspaceType)
-
-	// Keep same API surface
-	const spawn = useCallback(
-		(
-			processId: ProcessId,
-			packagePath: string,
-			scriptName: string,
-		): SpawnResult => {
-			return spawnProcess(processId, packagePath, scriptName, workspaceType)
-		},
-		[workspaceType],
-	)
-
-	const kill = useCallback((processId: ProcessId): boolean => {
-		return killProcess(processId)
-	}, [])
-
-	const killAll = useCallback(() => {
-		killAllProcesses()
-	}, [])
-
-	const getOutput = useCallback((processId: ProcessId): string[] => {
-		return getProcessOutput(processId)
-	}, [])
-
-	const isRunning = useCallback((processId: ProcessId): boolean => {
-		return isProcessRunning(processId)
-	}, [])
-
-	const onOutput = useCallback(
-		(processId: ProcessId, callback: (line: string) => void): (() => void) => {
-			return onProcessOutput(processId, callback)
-		},
-		[],
-	)
-
-	return {
-		processes,
-		spawn,
-		kill,
-		killAll,
-		getOutput,
-		isRunning,
-		onOutput,
-	}
-}
+import outputStore, { type OutputLine } from "../stores/outputStore"
+import { processManagerStore } from "../stores/processManagerStore"
 
 export const useProcess = (processId?: string) => {
 	return useStore(processManagerStore, (s) =>
@@ -69,16 +10,25 @@ export const useProcess = (processId?: string) => {
 	)
 }
 
+export const useOutput = ({
+	processId,
+	cb,
+}: {
+	processId: string
+	cb: (line: OutputLine) => void
+}) => {
+	if (!processId) {
+		return () => null
+	}
+	return outputStore.subscribeToOutput(processId, cb)
+}
+
 export const useProcessList = () => {
 	const packages = useStore(processManagerStore, (s) => s.packages)
-	const processManager = useProcessManager()
 	const selectedIndex = useStore(processManagerStore, (s) => s.selectedIndex)
 
 	// Build flat list
-	const list = useMemo(
-		() => buildFlatList(packages, processManager),
-		[packages, processManager],
-	)
+	const list = useMemo(() => buildFlatList(packages), [packages])
 
 	const selected = useMemo(() => list.at(selectedIndex), [selectedIndex, list])
 

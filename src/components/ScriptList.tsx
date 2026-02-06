@@ -1,12 +1,14 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
 import { useMemo } from "react"
-import {
-	useProcess,
-	useProcessList,
-	useProcessManager,
-} from "../hooks/useProcessManager"
+import { useProcess, useProcessList } from "../hooks/useProcessManager"
 import { useModalIsOpened } from "../hooks/useView"
 import { log } from "../lib/logger"
+import {
+	killAllProcesses,
+	killProcess,
+	processManagerStore,
+	spawnProcess,
+} from "../stores/processManagerStore"
 import { useTheme } from "../stores/themeStore"
 
 export function ScriptList() {
@@ -14,11 +16,12 @@ export function ScriptList() {
 	const { t } = useTheme()
 	const { list, selected, moveUp, moveDown } = useProcessList()
 	const isModalOpened = useModalIsOpened()
-	const processManager = useProcessManager()
 
 	useKeyboard((key) => {
 		if (list.length === 0) return
 		if (isModalOpened) return
+		const proc =
+			selected && processManagerStore.state.processes.get(selected.id)
 
 		switch (key.name) {
 			case "up":
@@ -35,14 +38,14 @@ export function ScriptList() {
 				if (!selected) return
 				if (selected.type === "script") {
 					const processId = selected.id
-					log.info(`isRunning: ${processManager.isRunning(processId)}`)
-					if (processManager.isRunning(processId)) {
-						processManager.kill(processId)
+					log.info(`isRunning: ${proc?.isRunning ?? false}`)
+					if (proc?.isRunning) {
+						killProcess(proc.processId)
 					} else {
 						log.info(`spawn ${selected.packagePath} ${selected.scriptName}`)
 						if (selected.packagePath === undefined || !selected.scriptName)
 							return
-						const result = processManager.spawn(
+						const result = spawnProcess(
 							processId,
 							selected.packagePath,
 							selected.scriptName,
@@ -59,13 +62,13 @@ export function ScriptList() {
 
 			case "x":
 				if (selected?.type === "script") {
-					processManager.kill(selected.id)
+					killProcess(selected.id)
 				}
 				break
 
 			case "q":
 			case "escape":
-				processManager.killAll()
+				killAllProcesses()
 				process.exit(0)
 		}
 	})
@@ -149,9 +152,8 @@ const ListItem = ({ id }: { id: string }) => {
 				}}
 			>
 				<text fg={isSelected ? t.selectedText : t.header}>
-					{item.packagePath} ({item.scriptCount})
+					{item.packagePath}
 				</text>
-				{item.hasRunningScript && <text fg={t.success}>●</text>}
 			</box>
 		)
 	}

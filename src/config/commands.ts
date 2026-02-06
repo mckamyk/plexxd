@@ -3,14 +3,6 @@ import { killAllProcesses } from "../stores/processManagerStore"
 import { themeStore } from "../stores/themeStore"
 import type { Command } from "../types"
 
-export interface CommandContext {
-	toggleTheme: () => void
-	openLogViewer: () => void
-	killAllProcesses: () => void
-	exit: () => void
-	closePalette: () => void
-}
-
 export const commands: Command[] = [
 	{
 		id: "toggle-theme",

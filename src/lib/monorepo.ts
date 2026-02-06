@@ -5,7 +5,6 @@ import { log } from "../lib/logger"
 import type {
 	ListItem,
 	PackageJson,
-	ProcessManager,
 	ScriptInfo,
 	WorkspacePackage,
 } from "../types"
@@ -218,10 +217,7 @@ export async function detectAndLoadWorkspace() {
 	return packages
 }
 
-export function buildFlatList(
-	packages: WorkspacePackage[],
-	processManager: ProcessManager,
-): ListItem[] {
+export function buildFlatList(packages: WorkspacePackage[]): ListItem[] {
 	const items: ListItem[] = []
 
 	// Root package scripts (no header)
@@ -252,18 +248,11 @@ export function buildFlatList(
 			})
 		}
 
-		// Check if any script in this package is running
-		const hasRunningScript = pkg.scripts.some((s) =>
-			processManager.isRunning(`${pkg.path}/${s.name}`),
-		)
-
 		// Add header
 		items.push({
 			type: "header",
 			id: `header:${pkg.path}`,
 			packagePath: pkg.path,
-			scriptCount: pkg.scripts.length,
-			hasRunningScript,
 		})
 
 		// Add scripts if expanded

@@ -9,7 +9,10 @@
 	},
 	"scripts": {
 		"dev": "bun run src/index.tsx",
-		"build": "bun build src/index.tsx --outfile=plexxd --compile --target=bun-darwin-arm64"
+		"dobuild": "bun build src/index.tsx --outfile=plexxd --compile --target=bun-darwin-arm64",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check --fix",
+		"build": "bun typecheck && bun lint && bun dobuild"
 	},
 	"keywords": [
 		"terminal",
