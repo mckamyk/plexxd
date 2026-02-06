@@ -1,26 +1,15 @@
-import { useTerminalDimensions } from "@opentui/react"
-import { useEffect, useState } from "react"
-import { useConfig } from "../hooks/useConfig"
-import type { ProcessId } from "../types"
+import { useProcess, useProcessList } from "../hooks/useProcessManager"
+import { useModalIsOpened } from "../hooks/useView"
+import { useTheme } from "../stores/themeStore"
 
-interface TerminalOutputProps {
-	processId: ProcessId
-	output: string[]
-}
+export function TerminalOutput() {
+	const { t } = useTheme()
+	const { selected } = useProcessList()
+	const process = useProcess(selected?.id)
 
-export function TerminalOutput({ processId, output }: TerminalOutputProps) {
-	const { height } = useTerminalDimensions()
-	const { currentTheme: t } = useConfig()
-	const [displayLines, setDisplayLines] = useState<string[]>([])
+	const isModalOpened = useModalIsOpened()
 
-	useEffect(() => {
-		// Keep only visible lines to prevent memory issues
-		const maxLines = Math.max(10, height - 10)
-		const lines = output.slice(-maxLines)
-		setDisplayLines(lines)
-	}, [output, height])
-
-	if (!processId) {
+	if (!selected) {
 		return (
 			<box
 				style={{
@@ -53,20 +42,24 @@ export function TerminalOutput({ processId, output }: TerminalOutputProps) {
 			}}
 		>
 			<text fg={t.header} attributes={1}>
-				{processId}
+				{selected.scriptName}
 			</text>
 			<box style={{ height: 1 }} />
-			<box style={{ flexDirection: "column", flexGrow: 1 }}>
-				{displayLines.length === 0 ? (
+			<scrollbox
+				live
+				focused={!isModalOpened}
+				style={{ flexDirection: "column", flexGrow: 1 }}
+			>
+				{!process ? (
 					<text fg={t.textSecondary}>No output yet...</text>
 				) : (
-					displayLines.map((line) => (
-						<text key={`${processId}`} fg={t.textPrimary}>
-							{line || " "}
+					process.output.map((line) => (
+						<text key={`${selected.id}-${line.offset}`} fg={t.textPrimary}>
+							{line.content || " "}
 						</text>
 					))
 				)}
-			</box>
+			</scrollbox>
 		</box>
 	)
 }

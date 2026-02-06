@@ -1,12 +1,21 @@
+import { useStore } from "@tanstack/react-store"
 import { Store } from "@tanstack/store"
-import { type AppConfig, loadConfig, saveConfig } from "./index"
-import type { ThemeMode } from "./themes"
+import { darkTheme, lightTheme, type ThemeMode } from "../config/themes"
 
-export interface ConfigState extends AppConfig {
-	_resolvedTheme: "light" | "dark"
+export const themeStore = new Store<"dark" | "light" | "system">("system")
+
+export const useTheme = () => {
+	const setting = useStore(themeStore)
+	const theme = getResolvedTheme(setting)
+
+	const setTheme = (theme: "dark" | "light" | "system") => {
+		themeStore.setState(theme)
+	}
+
+	const t = theme === "light" ? lightTheme : darkTheme
+
+	return { setting, theme, setTheme, t }
 }
-
-const initialConfig = loadConfig()
 
 function getResolvedTheme(theme: ThemeMode): "light" | "dark" {
 	if (theme === "light") return "light"
@@ -56,43 +65,4 @@ function detectSystemDarkMode(): boolean {
 
 	// Default to light as requested
 	return false
-}
-
-const initialState: ConfigState = {
-	theme: initialConfig.theme,
-	version: initialConfig.version,
-	_resolvedTheme: getResolvedTheme(initialConfig.theme),
-}
-
-export const configStore = new Store<ConfigState>(initialState, {
-	onUpdate: () => {
-		// Persist to disk
-		const state = configStore.state
-		saveConfig({
-			theme: state.theme,
-			version: state.version,
-		})
-	},
-})
-
-// Helper functions
-export function setTheme(theme: ThemeMode): void {
-	configStore.setState((prev) => ({
-		...prev,
-		theme,
-		_resolvedTheme: getResolvedTheme(theme),
-	}))
-}
-
-export function toggleTheme(): void {
-	configStore.setState((prev) => {
-		const modes: ThemeMode[] = ["light", "dark", "system"]
-		const currentIndex = modes.indexOf(prev.theme)
-		const nextMode = modes[(currentIndex + 1) % modes.length]
-		return {
-			...prev,
-			theme: nextMode,
-			_resolvedTheme: getResolvedTheme(nextMode),
-		}
-	})
 }

@@ -1,158 +1,74 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { useConfig } from "../hooks/useConfig"
-import type { Command } from "../types"
+import { useCallback, useMemo, useState } from "react"
+import { commands, filterCommands } from "../config/commands"
+import { useCommandPallete } from "../hooks/useView"
+import { useTheme } from "../stores/themeStore"
 
-interface CommandPaletteProps {
-	commands: Command[]
-	isOpen: boolean
-	searchQuery: string
-	selectedIndex: number
-	onSearchChange: (query: string) => void
-	onSelectIndex: (index: number | ((prev: number) => number)) => void
-	onExecute: (command: Command) => void
-	onClose: () => void
-}
-
-export function CommandPalette({
-	commands,
-	isOpen,
-	searchQuery,
-	selectedIndex,
-	onSearchChange,
-	onSelectIndex,
-	onExecute,
-	onClose,
-}: CommandPaletteProps) {
+export function CommandPalette() {
 	const { width } = useTerminalDimensions()
-	const { currentTheme: t } = useConfig()
-	const [cursorPosition, setCursorPosition] = useState(0)
-
-	// Focus on open
-	useEffect(() => {
-		if (isOpen) {
-			setCursorPosition(searchQuery.length)
-		}
-	}, [isOpen, searchQuery.length])
+	const { t } = useTheme()
+	const [searchQuery, setSearchQuery] = useState("")
+	const [selectedIndex, setSelectedIndex] = useState(0)
+	const [isOpen, setIsOpen] = useCommandPallete()
 
 	const filteredCommands = useMemo(() => {
-		if (!searchQuery.trim()) {
-			return commands.slice(0, 10)
-		}
-		const lowerQuery = searchQuery.toLowerCase()
-		return commands
-			.filter(
-				(cmd) =>
-					cmd.name.toLowerCase().includes(lowerQuery) ||
-					cmd.id.toLowerCase().includes(lowerQuery) ||
-					cmd.description?.toLowerCase().includes(lowerQuery),
-			)
-			.slice(0, 10)
-	}, [commands, searchQuery])
+		return filterCommands(searchQuery)
+	}, [searchQuery])
 
-	// Ensure selected index stays valid
-	useEffect(() => {
-		if (selectedIndex >= filteredCommands.length) {
-			onSelectIndex(Math.max(0, filteredCommands.length - 1))
-		}
-	}, [filteredCommands.length, selectedIndex, onSelectIndex])
-
-	const maxIndex = Math.max(0, filteredCommands.length - 1)
-	const selectedCommand = filteredCommands[selectedIndex]
+	const selectedCommand = useMemo(() => {
+		return filteredCommands[selectedIndex]
+	}, [selectedIndex, filteredCommands])
 
 	useKeyboard(
 		useCallback(
 			(key) => {
-				if (!isOpen) return
+				if (!isOpen) {
+					if (key.name === "p" && key.ctrl) {
+						setIsOpen(true)
+					}
+					return
+				}
 
 				switch (key.name) {
 					case "escape":
 						if (searchQuery) {
 							// Clear search first, then close on next escape
-							onSearchChange("")
-							setCursorPosition(0)
+							setSearchQuery("")
 						} else {
-							onClose()
+							setIsOpen(false)
 						}
 						break
 
 					case "return":
 						if (selectedCommand) {
-							onExecute(selectedCommand)
+							selectedCommand.execute()
+							setIsOpen(false)
 						}
 						break
 
 					case "up":
-						onSelectIndex((prev) => Math.max(0, prev - 1))
+						setSelectedIndex((prev) => Math.max(0, prev - 1))
 						break
 
 					case "down":
-						onSelectIndex((prev) => Math.min(maxIndex, prev + 1))
+						setSelectedIndex((prev) =>
+							Math.min(filteredCommands.length - 1, prev + 1),
+						)
 						break
 
 					case "tab":
 						if (key.shift) {
-							onSelectIndex((prev) => Math.max(0, prev - 1))
+							setSelectedIndex((prev) => Math.max(0, prev - 1))
 						} else {
-							onSelectIndex((prev) => Math.min(maxIndex, prev + 1))
+							setSelectedIndex((prev) =>
+								Math.min(filteredCommands.length - 1, prev + 1),
+							)
 						}
-						break
-
-					case "backspace":
-						if (cursorPosition > 0) {
-							const newQuery =
-								searchQuery.slice(0, cursorPosition - 1) +
-								searchQuery.slice(cursorPosition)
-							onSearchChange(newQuery)
-							setCursorPosition(cursorPosition - 1)
-						}
-						break
-
-					case "delete":
-						if (cursorPosition < searchQuery.length) {
-							const newQuery =
-								searchQuery.slice(0, cursorPosition) +
-								searchQuery.slice(cursorPosition + 1)
-							onSearchChange(newQuery)
-						}
-						break
-
-					case "left":
-						setCursorPosition((prev) => Math.max(0, prev - 1))
-						break
-
-					case "right":
-						setCursorPosition((prev) => Math.min(searchQuery.length, prev + 1))
-						break
-
-					case "home":
-						setCursorPosition(0)
-						break
-
-					case "end":
-						setCursorPosition(searchQuery.length)
 						break
 
 					case "c":
 						if (key.ctrl) {
-							onSearchChange("")
-							setCursorPosition(0)
-						}
-						break
-
-					default:
-						// Handle printable characters
-						if (key.sequence && key.sequence.length === 1) {
-							const char = key.sequence
-							// Only accept printable ASCII characters
-							if (char.charCodeAt(0) >= 32 && char.charCodeAt(0) < 127) {
-								const newQuery =
-									searchQuery.slice(0, cursorPosition) +
-									char +
-									searchQuery.slice(cursorPosition)
-								onSearchChange(newQuery)
-								setCursorPosition(cursorPosition + 1)
-							}
+							setSearchQuery("")
 						}
 						break
 				}
@@ -160,13 +76,9 @@ export function CommandPalette({
 			[
 				isOpen,
 				searchQuery,
-				cursorPosition,
 				selectedCommand,
-				maxIndex,
-				onSearchChange,
-				onSelectIndex,
-				onExecute,
-				onClose,
+				setIsOpen,
+				filteredCommands.length,
 			],
 		),
 	)
@@ -223,29 +135,7 @@ export function CommandPalette({
 			>
 				<box style={{ flexDirection: "row", height: 1 }}>
 					<text fg={t.textSecondary}>{"> "}</text>
-					{searchQuery ? (
-						<>
-							<text fg={t.textPrimary}>
-								{searchQuery.slice(0, cursorPosition)}
-							</text>
-							<box
-								style={{
-									backgroundColor: t.primary,
-									width: 1,
-									height: 1,
-								}}
-							>
-								<text fg={t.selectedText}>
-									{searchQuery[cursorPosition] || " "}
-								</text>
-							</box>
-							<text fg={t.textPrimary}>
-								{searchQuery.slice(cursorPosition + 1)}
-							</text>
-						</>
-					) : (
-						<text fg={t.textTertiary}>Type to search...</text>
-					)}
+					<input focused placeholder="Search..." onInput={setSearchQuery} />
 				</box>
 
 				<box style={{ height: 1 }} />

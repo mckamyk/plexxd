@@ -1,22 +1,76 @@
-import { useTerminalDimensions } from "@opentui/react"
-import { useConfig } from "../hooks/useConfig"
-import type { ListItem, ProcessId } from "../types"
+import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useMemo } from "react"
+import {
+	useProcess,
+	useProcessList,
+	useProcessManager,
+} from "../hooks/useProcessManager"
+import { useModalIsOpened } from "../hooks/useView"
+import { log } from "../lib/logger"
+import { useTheme } from "../stores/themeStore"
 
-interface ScriptListProps {
-	items: ListItem[]
-	selectedIndex: number
-	isRunning: (processId: ProcessId) => boolean
-}
-
-export function ScriptList({
-	items,
-	selectedIndex,
-	isRunning,
-}: ScriptListProps) {
+export function ScriptList() {
 	const { width } = useTerminalDimensions()
-	const { currentTheme: t } = useConfig()
+	const { t } = useTheme()
+	const { list, selected, moveUp, moveDown } = useProcessList()
+	const isModalOpened = useModalIsOpened()
+	const processManager = useProcessManager()
 
-	if (items.length === 0) {
+	useKeyboard((key) => {
+		if (list.length === 0) return
+		if (isModalOpened) return
+
+		switch (key.name) {
+			case "up":
+			case "k":
+				moveUp()
+				break
+
+			case "down":
+			case "j":
+				moveDown()
+				break
+
+			case "return":
+				if (!selected) return
+				if (selected.type === "script") {
+					const processId = selected.id
+					log.info(`isRunning: ${processManager.isRunning(processId)}`)
+					if (processManager.isRunning(processId)) {
+						processManager.kill(processId)
+					} else {
+						log.info(`spawn ${selected.packagePath} ${selected.scriptName}`)
+						if (selected.packagePath === undefined || !selected.scriptName)
+							return
+						const result = processManager.spawn(
+							processId,
+							selected.packagePath,
+							selected.scriptName,
+						)
+						log.info(`spawn result: ${JSON.stringify(result)}`)
+						if (result.error) {
+							log.error(
+								`Failed to spawn: ${result.error.name}: ${result.error.message}`,
+							)
+						}
+					}
+				}
+				break
+
+			case "x":
+				if (selected?.type === "script") {
+					processManager.kill(selected.id)
+				}
+				break
+
+			case "q":
+			case "escape":
+				processManager.killAll()
+				process.exit(0)
+		}
+	})
+
+	if (list.length === 0) {
 		return (
 			<box
 				flexBasis={width * 0.3}
@@ -48,73 +102,80 @@ export function ScriptList({
 				Scripts
 			</text>
 			<box style={{ height: 1 }} />
-			{items.map((item, index) => {
-				const isSelected = index === selectedIndex
+			{list.map((item) => (
+				<ListItem key={item.id} id={item.id} />
+			))}
+		</box>
+	)
+}
 
-				// Separator line
-				if (item.type === "separator") {
-					return (
-						<box
-							key={item.id}
-							border={["bottom"]}
-							style={{
-								height: 1,
-								borderColor: t.border,
-							}}
-						/>
-					)
-				}
+const ListItem = ({ id }: { id: string }) => {
+	const { list, selected } = useProcessList()
+	const { t } = useTheme()
 
-				// Package header
-				if (item.type === "header") {
-					return (
-						<box
-							key={item.id}
-							style={{
-								height: 1,
-								backgroundColor: isSelected ? t.primary : undefined,
-								flexDirection: "row",
-								justifyContent: "space-between",
-							}}
-						>
-							<text fg={isSelected ? t.selectedText : t.header}>
-								{item.collapsed ? "▶" : "▼"} {item.packagePath} (
-								{item.scriptCount})
-							</text>
-							{item.collapsed && item.hasRunningScript && (
-								<text fg={t.success}>●</text>
-							)}
-						</box>
-					)
-				}
+	const item = useMemo(() => {
+		return list.find((i) => i.id === id)
+	}, [list, id])
 
-				// Script item
-				const running = isRunning(item.id)
-				const bg = isSelected ? t.primary : undefined
-				const fg = isSelected
-					? t.selectedText
-					: running
-						? t.success
-						: t.textSecondary
-				const prefix = item.packagePath ? "  " : "" // Indent package scripts
+	const isSelected = item === selected
+	const proc = useProcess(id)
 
-				return (
-					<box
-						key={item.id}
-						style={{
-							height: 1,
-							backgroundColor: bg,
-							flexDirection: "row",
-						}}
-					>
-						<text fg={fg}>
-							{prefix}
-							{running ? "● " : "○ "}
-							{item.scriptName}
-						</text>
-					</box>
-				)
-			})}
+	if (!item) return null
+
+	// Separator line
+	if (item.type === "separator") {
+		return (
+			<box
+				key={item.id}
+				border={["bottom"]}
+				style={{
+					height: 1,
+					borderColor: t.border,
+				}}
+			/>
+		)
+	}
+
+	// Package header
+	if (item.type === "header") {
+		return (
+			<box
+				key={item.id}
+				style={{
+					height: 1,
+					backgroundColor: isSelected ? t.primary : undefined,
+					flexDirection: "row",
+					justifyContent: "space-between",
+				}}
+			>
+				<text fg={isSelected ? t.selectedText : t.header}>
+					{item.packagePath} ({item.scriptCount})
+				</text>
+				{item.hasRunningScript && <text fg={t.success}>●</text>}
+			</box>
+		)
+	}
+
+	// Script item
+	const running = !!proc?.isRunning
+	const bg = isSelected ? t.primary : undefined
+	const fg = isSelected ? t.selectedText : running ? t.success : t.textSecondary
+	const prefix = item.packagePath ? "  " : "" // Indent package scripts
+
+	return (
+		<box
+			key={item.id}
+			style={{
+				height: 1,
+				backgroundColor: bg,
+				flexDirection: "row",
+			}}
+		>
+			<text fg={fg}>
+				{prefix}
+				{running ? "● " : "○ "}
+				{item.scriptName}
+			</text>
 		</box>
 	)
 }

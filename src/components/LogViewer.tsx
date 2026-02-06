@@ -1,7 +1,8 @@
 import { useKeyboard } from "@opentui/react"
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { useConfig } from "../hooks/useConfig"
-import { type LogEntry, type LogLevel, log } from "../lib/logger"
+import { useCallback, useMemo, useState } from "react"
+import { useLogViewer } from "../hooks/useView"
+import { type LogLevel, log } from "../lib/logger"
+import { useTheme } from "../stores/themeStore"
 
 const FILTER_CYCLE: (LogLevel | null)[] = [
 	null,
@@ -11,11 +12,22 @@ const FILTER_CYCLE: (LogLevel | null)[] = [
 	"error",
 ]
 
-export function LogViewer({ onClose }: { onClose: () => void }) {
-	const [logs, setLogs] = useState<LogEntry[]>([])
-	const [scrollOffset, setScrollOffset] = useState(0)
+export function LogViewer() {
 	const [filterIndex, setFilterIndex] = useState(0) // Start at index 0 (show all logs)
-	const { currentTheme: t } = useConfig()
+	const { t } = useTheme()
+
+	const [isOpen, setIsOpen] = useLogViewer()
+
+	useKeyboard(
+		useCallback(
+			(key) => {
+				if (key.name === "f12") {
+					setIsOpen((prev) => !prev)
+				}
+			},
+			[setIsOpen],
+		),
+	)
 
 	// Use theme colors for log levels
 	const levelColors: Record<LogLevel, string> = {
@@ -27,67 +39,38 @@ export function LogViewer({ onClose }: { onClose: () => void }) {
 
 	const filterLevel = FILTER_CYCLE[filterIndex]
 
-	useEffect(() => {
-		log.setFilter(filterLevel)
-		setLogs(log.getLogs(filterLevel))
-
-		const unsubscribe = log.onChange((newLogs) => {
-			setLogs(newLogs)
-		})
-
-		return unsubscribe
+	const logs = useMemo(() => {
+		return log.getLogs(filterLevel)
 	}, [filterLevel])
-
-	const maxScroll = Math.max(0, logs.length - 1)
 
 	useKeyboard(
 		useCallback(
 			(key) => {
+				if (!isOpen) {
+					if (key.name === "f12") setIsOpen(true)
+					return
+				}
 				switch (key.name) {
-					case "up":
-					case "k":
-						setScrollOffset((prev) => Math.max(0, prev - 1))
-						break
-					case "down":
-					case "j":
-						setScrollOffset((prev) => Math.min(maxScroll, prev + 1))
-						break
-					case "c":
-						log.clear()
-						setScrollOffset(0)
-						break
 					case "f":
 						setFilterIndex((prev) => (prev + 1) % FILTER_CYCLE.length)
 						break
 					case "escape":
 					case "q":
 					case "f12":
-						onClose()
-						break
-					case "g":
-						if (key.ctrl) {
-							setScrollOffset(0)
-						}
-						break
-					case "G":
-						setScrollOffset(maxScroll)
+						setIsOpen(false)
 						break
 				}
 			},
-			[onClose, maxScroll],
+			[setIsOpen, isOpen],
 		),
 	)
-
-	const visibleLogs = useMemo(() => {
-		// Show logs in reverse order (newest first), limited by scroll offset
-		const reversed = [...logs].reverse()
-		return reversed.slice(scrollOffset, scrollOffset + 50) // Show up to 50 lines
-	}, [logs, scrollOffset])
 
 	const filterLabel =
 		filterLevel === null
 			? "All"
 			: filterLevel.charAt(0).toUpperCase() + filterLevel.slice(1)
+
+	if (!isOpen) return null
 
 	return (
 		<box
@@ -124,7 +107,7 @@ export function LogViewer({ onClose }: { onClose: () => void }) {
 				<text>Close (F12/ESC/q)</text>
 			</box>
 
-			<box
+			<scrollbox
 				style={{
 					flexGrow: 1,
 					flexDirection: "column",
@@ -134,12 +117,12 @@ export function LogViewer({ onClose }: { onClose: () => void }) {
 					paddingBottom: 1,
 				}}
 			>
-				{visibleLogs.length === 0 ? (
+				{logs.length === 0 ? (
 					<text fg={t.textTertiary} attributes={2}>
 						No logs to display
 					</text>
 				) : (
-					visibleLogs.map((log, index) => (
+					logs.map((log, index) => (
 						<box
 							key={`${log.timestamp}-${index}`}
 							style={{ flexDirection: "row" }}
@@ -154,7 +137,7 @@ export function LogViewer({ onClose }: { onClose: () => void }) {
 						</box>
 					))
 				)}
-			</box>
+			</scrollbox>
 
 			<box
 				border={["top"]}
@@ -167,11 +150,7 @@ export function LogViewer({ onClose }: { onClose: () => void }) {
 					backgroundColor: t.bgTertiary,
 				}}
 			>
-				<text>
-					{scrollOffset + 1}-
-					{Math.min(scrollOffset + visibleLogs.length, logs.length)} /{" "}
-					{logs.length}
-				</text>
+				<text>{logs.length} logs</text>
 				<box style={{ flexGrow: 1 }} />
 				<text>j/k or ↑/↓ to scroll | g/G to jump top/bottom</text>
 			</box>

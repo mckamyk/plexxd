@@ -33,7 +33,6 @@ export interface ListItem {
 	command?: string
 
 	// For headers
-	collapsed?: boolean
 	scriptCount?: number
 	hasRunningScript?: boolean // For collapsed header indicator
 }
@@ -41,13 +40,16 @@ export interface ListItem {
 // Process ID format: "apps/web/dev" or "dev" for root
 export type ProcessId = string
 
+export type OutputLine = { content: string; offset: number }
+
 export interface ProcessInfo {
 	processId: ProcessId
 	packagePath: string
 	scriptName: string
 	process: ReturnType<typeof Bun.spawn>
 	isRunning: boolean
-	output: string[]
+	output: OutputLine[]
+	numLines: number
 	exitCode?: number
 }
 
@@ -73,7 +75,6 @@ export interface ProcessManager {
 		processId: ProcessId,
 		packagePath: string,
 		scriptName: string,
-		workspaceType: WorkspaceType,
 	) => SpawnResult
 	kill: (processId: ProcessId) => boolean
 	killAll: () => void
