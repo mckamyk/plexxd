@@ -1,8 +1,8 @@
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { Text } from "@opentui/core"
-import { useEffect, useMemo, useRef } from "react"
+import { useKeyboard } from "@opentui/react"
+import { useEffect, useRef, useState } from "react"
 import { useProcess, useProcessList } from "../hooks/useProcessManager"
-import { useModalIsOpened } from "../hooks/useView"
+import { useModalIsOpened, useTerminalOutput } from "../hooks/useView"
 import type { OutputLine } from "../stores/outputStore"
 import outputStore from "../stores/outputStore"
 import { useTheme } from "../stores/themeStore"
@@ -12,24 +12,29 @@ export function TerminalOutput() {
 	const { selected } = useProcessList()
 	const process = useProcess(selected?.id)
 	const ref = useRef<ScrollBoxRenderable>(null)
-
 	const processId = selected?.id
-
-	const lines = useMemo(() => {
-		if (!processId) return []
-		return outputStore.getOutput(processId)
-	}, [processId])
+	const [lines, setLines] = useState<OutputLine[]>(
+		outputStore.getOutput(processId),
+	)
 
 	useEffect(() => {
 		if (!processId) return () => {}
 		const updater = (line: OutputLine) => {
-			if (!ref.current) return
-			ref.current.add(Text({ content: line.content, fg: t.textPrimary }))
+			setLines((lines) => [...lines, line])
 		}
 		return outputStore.subscribeToOutput(processId, updater)
-	}, [processId, t.textPrimary])
+	}, [processId])
 
 	const isModalOpened = useModalIsOpened()
+	const [terminalFocused, setTerminalFocused] = useTerminalOutput()
+	const focused = !isModalOpened && terminalFocused
+
+	useKeyboard((key) => {
+		if (!focused) return
+		if (key.name === "escape" || key.name === "q") {
+			setTerminalFocused(false)
+		}
+	})
 
 	if (!selected) {
 		return (
@@ -60,7 +65,7 @@ export function TerminalOutput() {
 				flexDirection: "column",
 				paddingLeft: 1,
 				paddingRight: 1,
-				borderColor: t.border,
+				borderColor: focused ? t.success : t.border,
 			}}
 		>
 			<text fg={t.header} attributes={1}>
@@ -69,8 +74,9 @@ export function TerminalOutput() {
 			<box style={{ height: 1 }} />
 			<scrollbox
 				ref={ref}
-				live
-				focused={!isModalOpened}
+				stickyScroll={true}
+				stickyStart="bottom"
+				focused={focused}
 				style={{ flexDirection: "column", flexGrow: 1 }}
 			>
 				{!process ? (

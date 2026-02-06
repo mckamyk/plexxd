@@ -1,15 +1,12 @@
 import { join } from "node:path"
 import { Store } from "@tanstack/store"
 import { log } from "../lib/logger"
-import { detectAndLoadWorkspace, detectWorkspaceType } from "../lib/monorepo"
-import type {
-	ProcessId,
-	ProcessInfo,
-	ProcessMap,
-	SpawnResult,
-	WorkspacePackage,
-	WorkspaceType,
-} from "../types"
+import {
+	buildFlatList,
+	detectAndLoadWorkspace,
+	detectWorkspaceType,
+} from "../lib/monorepo"
+import type { ProcessId, ProcessInfo, ProcessMap, SpawnResult } from "../types"
 import outputStore from "./outputStore"
 
 // Cache bun availability check
@@ -38,20 +35,18 @@ function checkBunAvailable(): boolean {
 
 // Store state interface
 interface ProcessManagerState {
-	packages: WorkspacePackage[]
-	workspaceType: WorkspaceType
 	processes: ProcessMap
-	selectedIndex: number
 	selectedId?: ProcessId
 }
 
+export const packages = await detectAndLoadWorkspace()
+export const workspaceType = detectWorkspaceType(process.cwd())
+export const scripts = buildFlatList(packages)
+
 // Create the store
 export const processManagerStore = new Store<ProcessManagerState>({
-	packages: await detectAndLoadWorkspace(),
-	workspaceType: detectWorkspaceType(process.cwd()),
 	processes: new Map(),
-	selectedIndex: 0,
-	selectedId: undefined,
+	selectedId: scripts[0].id,
 })
 
 // Output callbacks registry (not in store state, but module-level)
@@ -64,7 +59,6 @@ export function spawnProcess(
 	scriptName: string,
 ): SpawnResult {
 	const currentProcesses = processManagerStore.state.processes
-	const workspaceType = processManagerStore.state.workspaceType
 
 	log.info(
 		`Spawning process ${processId} with script ${scriptName} in workspace type ${workspaceType}`,

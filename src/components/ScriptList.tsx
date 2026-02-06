@@ -1,24 +1,29 @@
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
-import { useMemo } from "react"
 import { useProcess, useProcessList } from "../hooks/useProcessManager"
-import { useModalIsOpened } from "../hooks/useView"
+import { useModalIsOpened, useTerminalOutput } from "../hooks/useView"
 import { log } from "../lib/logger"
 import {
 	killAllProcesses,
 	killProcess,
 	processManagerStore,
+	scripts,
 	spawnProcess,
 } from "../stores/processManagerStore"
 import { useTheme } from "../stores/themeStore"
+import type { ListItem } from "../types"
 
 export function ScriptList() {
 	const { width } = useTerminalDimensions()
 	const { t } = useTheme()
-	const { list, selected, moveUp, moveDown } = useProcessList()
+	const { selected, moveUp, moveDown } = useProcessList()
+
 	const isModalOpened = useModalIsOpened()
+	const [terminalFocused, setTerminalFocused] = useTerminalOutput()
+	const focused = !isModalOpened && !terminalFocused
 
 	useKeyboard((key) => {
-		if (list.length === 0) return
+		if (!focused) return
+		if (scripts.length === 0) return
 		if (isModalOpened) return
 		const proc =
 			selected && processManagerStore.state.processes.get(selected.id)
@@ -40,7 +45,7 @@ export function ScriptList() {
 					const processId = selected.id
 					log.info(`isRunning: ${proc?.isRunning ?? false}`)
 					if (proc?.isRunning) {
-						killProcess(proc.processId)
+						setTerminalFocused(true)
 					} else {
 						log.info(`spawn ${selected.packagePath} ${selected.scriptName}`)
 						if (selected.packagePath === undefined || !selected.scriptName)
@@ -73,7 +78,7 @@ export function ScriptList() {
 		}
 	})
 
-	if (list.length === 0) {
+	if (scripts.length === 0) {
 		return (
 			<box
 				flexBasis={width * 0.3}
@@ -97,31 +102,26 @@ export function ScriptList() {
 				flexDirection: "column",
 				paddingLeft: 1,
 				paddingRight: 1,
-				backgroundColor: t.bgPrimary,
-				borderColor: t.border,
+				borderColor: focused ? t.success : t.border,
 			}}
 		>
 			<text fg={t.header} attributes={1}>
 				Scripts
 			</text>
 			<box style={{ height: 1 }} />
-			{list.map((item) => (
-				<ListItem key={item.id} id={item.id} />
+			{scripts.map((item) => (
+				<ListRow key={item.id} item={item} />
 			))}
 		</box>
 	)
 }
 
-const ListItem = ({ id }: { id: string }) => {
-	const { list, selected } = useProcessList()
+const ListRow = ({ item }: { item: ListItem }) => {
+	const { selected } = useProcessList()
 	const { t } = useTheme()
 
-	const item = useMemo(() => {
-		return list.find((i) => i.id === id)
-	}, [list, id])
-
 	const isSelected = item === selected
-	const proc = useProcess(id)
+	const proc = useProcess(item.id)
 
 	if (!item) return null
 
@@ -161,7 +161,7 @@ const ListItem = ({ id }: { id: string }) => {
 	// Script item
 	const running = !!proc?.isRunning
 	const bg = isSelected ? t.primary : undefined
-	const fg = isSelected ? t.selectedText : running ? t.success : t.textSecondary
+	const fg = running ? t.success : isSelected ? t.selectedText : t.textPrimary
 	const prefix = item.packagePath ? "  " : "" // Indent package scripts
 
 	return (

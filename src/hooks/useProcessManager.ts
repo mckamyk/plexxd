@@ -1,8 +1,6 @@
 import { useStore } from "@tanstack/react-store"
-import { useMemo } from "react"
-import { buildFlatList } from "../lib/monorepo"
 import outputStore, { type OutputLine } from "../stores/outputStore"
-import { processManagerStore } from "../stores/processManagerStore"
+import { processManagerStore, scripts } from "../stores/processManagerStore"
 
 export const useProcess = (processId?: string) => {
 	return useStore(processManagerStore, (s) =>
@@ -24,33 +22,27 @@ export const useOutput = ({
 }
 
 export const useProcessList = () => {
-	const packages = useStore(processManagerStore, (s) => s.packages)
-	const selectedIndex = useStore(processManagerStore, (s) => s.selectedIndex)
-
-	// Build flat list
-	const list = useMemo(() => buildFlatList(packages), [packages])
-
-	const selected = useMemo(() => list.at(selectedIndex), [selectedIndex, list])
-
-	const moveUp = () => {
-		const newIndex = Math.max(0, selectedIndex - 1)
-		const selectedId = list.at(newIndex)?.id
+	const selected = useStore(
+		processManagerStore,
+		(s) => scripts.find((i) => i.id === s.selectedId) ?? scripts[0],
+	)
+	const setSelected = (id: string) =>
 		processManagerStore.setState((s) => ({
 			...s,
-			selectedIndex: newIndex,
-			selectedId,
+			selectedId: id,
 		}))
+
+	const moveUp = () => {
+		const index = scripts.findIndex((i) => i.id === selected?.id) ?? 0
+		const newIndex = Math.max(0, index - 1)
+		setSelected(scripts[newIndex].id)
 	}
 
 	const moveDown = () => {
-		const newIndex = Math.min(list.length - 1, selectedIndex + 1)
-		const selectedId = list.at(newIndex)?.id
-		processManagerStore.setState((s) => ({
-			...s,
-			selectedIndex: newIndex,
-			selectedId,
-		}))
+		const index = scripts.findIndex((i) => i.id === selected?.id) ?? 0
+		const newIndex = Math.min(scripts.length - 1, index + 1)
+		setSelected(scripts[newIndex].id)
 	}
 
-	return { selected, list, moveUp, moveDown }
+	return { selected, setSelected, moveUp, moveDown }
 }
