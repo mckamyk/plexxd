@@ -1,4 +1,5 @@
 import { CommandPalette } from "./CommandPalette"
+import { Console } from "./Console"
 import { LogViewer } from "./LogViewer"
 import { ScriptList } from "./ScriptList"
 import { TerminalOutput } from "./TerminalOutput"
@@ -19,6 +20,7 @@ export function App() {
 
 			<CommandPalette />
 			<LogViewer />
+			<Console />
 		</box>
 	)
 }

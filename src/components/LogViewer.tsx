@@ -20,7 +20,7 @@ export function LogViewer() {
 	useKeyboard(
 		useCallback(
 			(key) => {
-				if (key.name === "f12") {
+				if (key.name === "l" && key.ctrl) {
 					setIsOpen((prev) => !prev)
 				}
 			},

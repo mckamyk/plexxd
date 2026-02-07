@@ -1,4 +1,6 @@
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/react"
+import { useEffect, useRef } from "react"
 import { useProcess, useProcessList } from "../hooks/useProcessManager"
 import { log } from "../lib/logger"
 import {
@@ -19,9 +21,33 @@ export function ScriptList() {
 	const { t } = useTheme()
 	const { selected, moveUp, moveDown } = useProcessList()
 
+	const scrollRef = useRef<ScrollBoxRenderable>(null)
+
 	const isModalOpened = useModalIsOpened()
 	const [terminalFocused, setTerminalFocused] = useTerminalOutput()
 	const focused = !isModalOpened && !terminalFocused
+
+	useEffect(() => {
+		if (!scrollRef.current) return
+		if (!selected) return
+
+		const index = scripts.findIndex((i) => i.id === selected.id)
+		const height = scrollRef.current.height
+		const top = scrollRef.current.scrollTop
+
+		const bottom = top + height - 1
+
+		console.log(`index: ${index}, top: ${top}, bottom: ${bottom}`)
+		if (index > bottom) {
+			const diff = index - bottom
+			console.log(`diff: ${diff}`)
+			scrollRef.current.scrollBy(diff)
+		} else if (index < top) {
+			const diff = index - top
+			console.log(`diff: ${diff}`)
+			scrollRef.current.scrollBy(diff)
+		}
+	}, [selected])
 
 	useKeyboard((key) => {
 		if (!focused) return
@@ -110,9 +136,11 @@ export function ScriptList() {
 				Scripts
 			</text>
 			<box style={{ height: 1 }} />
-			{scripts.map((item) => (
-				<ListRow key={item.id} item={item} />
-			))}
+			<scrollbox ref={scrollRef} focused={false} flexGrow={1}>
+				{scripts.map((item) => (
+					<ListRow key={item.id} item={item} />
+				))}
+			</scrollbox>
 			<box style={{ flexGrow: 2 }} />
 			<Keybinds />
 		</box>
@@ -132,6 +160,7 @@ const ListRow = ({ item }: { item: ListItem }) => {
 	if (item.type === "separator") {
 		return (
 			<box
+				id={item.id}
 				key={item.id}
 				border={["bottom"]}
 				style={{
@@ -146,6 +175,7 @@ const ListRow = ({ item }: { item: ListItem }) => {
 	if (item.type === "header") {
 		return (
 			<box
+				id={item.id}
 				key={item.id}
 				style={{
 					height: 1,
@@ -170,6 +200,7 @@ const ListRow = ({ item }: { item: ListItem }) => {
 
 	return (
 		<box
+			id={item.id}
 			key={item.id}
 			style={{
 				height: 1,
